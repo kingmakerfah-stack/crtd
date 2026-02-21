@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Approved</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .message {
+            margin: 20px 0;
+            line-height: 1.8;
+            color: #555;
+        }
+        .reference-code {
+            background-color: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .reference-code label {
+            display: block;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .reference-code .code {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+        }
+        .footer {
+            padding: 20px 30px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+        }
+        .button {
+            display: inline-block;
+            background-color: #667eea;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-weight: 600;
+        }
+        .button:hover {
+            background-color: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Congratulations!</h1>
+            <p>Your Application is Approved</p>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Hello {{ first_name }},
+            </div>
+            
+            <div class="message">
+                <p>We're delighted to inform you that your application has been <strong>approved</strong>!</p>
+                <p>Your application review was successful, and we're excited to have you on board.</p>
+            </div>
+            
+            <div class="reference-code">
+                <label>Your Reference Code</label>
+                <div class="code">{{ reference_code }}</div>
+            </div>
+            
+            <div class="message">
+                <p>Please save your reference code for future reference. You can use this code to:</p>
+                <ul>
+                    <li>Track your application status</li>
+                    <li>Access your account dashboard</li>
+                    <li>Contact support with inquiries</li>
+                </ul>
+            </div>
+            
+            <center>
+                <a href="https://crtdplatform.com/dashboard" class="button">Go to Dashboard</a>
+            </center>
+            
+            <div class="message">
+                <p>If you have any questions, please don't hesitate to contact our support team.</p>
+                <p>Best regards,<br><strong>The CRTD Team</strong></p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>&copy; 2026 CRTD Recruitment Platform. All rights reserved.</p>
+            <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
