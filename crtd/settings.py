@@ -8,7 +8,6 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 
 ?https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
 from pathlib import Path
 import os
 from dotenv import load_dotenv
@@ -85,6 +84,7 @@ DATABASES = {
         conn_max_age=600,
     )
 }
+
 
 
 # Password validation
