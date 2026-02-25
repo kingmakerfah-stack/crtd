@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_yasg',
     'pre_application',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -159,3 +160,5 @@ else:
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS')
 
 DEFAULT_FROM_EMAIL = 'muharibfah@gmail.com'
+
+# AUTH_USER_MODEL = 'accounts.CustomUser'
