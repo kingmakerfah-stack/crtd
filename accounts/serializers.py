@@ -1,12 +1,12 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
-from .models import UserProfile
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 class RoleBasedRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     confirm_password = serializers.CharField(write_only=True)
-    role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES)
 
     class Meta:
         model = User
@@ -28,17 +28,11 @@ class RoleBasedRegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('confirm_password')
-        role = validated_data.pop('role')
 
         user = User.objects.create_user(
-            username=validated_data['email'],
             email=validated_data['email'],
-            password=validated_data['password']
-        )
-
-        UserProfile.objects.create(
-            user=user,
-            role=role
+            password=validated_data['password'],
+            role=validated_data['role']
         )
 
         return user

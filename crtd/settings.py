@@ -161,4 +161,4 @@ else:
 
 DEFAULT_FROM_EMAIL = 'muharibfah@gmail.com'
 
-# AUTH_USER_MODEL = 'accounts.CustomUser'
+AUTH_USER_MODEL = 'accounts.CustomUser'
