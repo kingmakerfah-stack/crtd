@@ -162,3 +162,19 @@ else:
 DEFAULT_FROM_EMAIL = 'muharibfah@gmail.com'
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
+
+# -------------------------------------------------------
+# DRF + JWT CONFIGURATION
+# -------------------------------------------------------
+
+REST_FRAMEWORK = {
+    # Use JWT for authentication
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+
+    # Default permission (can override in views later)
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}

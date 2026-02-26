@@ -29,6 +29,9 @@ urlpatterns = [
 
     # Raw JSON/YAML schema
     path('swagger.json/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    
+    # Include accounts authentication routes
+    path('api/accounts/', include('accounts.urls')),
 ]
 
 if settings.DEBUG:
