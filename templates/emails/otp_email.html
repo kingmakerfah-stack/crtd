@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Application Approved</title>
+    <title>Verify Your Email</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -39,41 +39,41 @@
             font-size: 18px;
             margin-bottom: 20px;
             color: #333;
+            font-weight: 500;
         }
         .message {
             margin: 20px 0;
             line-height: 1.8;
             color: #555;
         }
-        .reference-code {
+        .otp-container {
             background-color: #f0f4ff;
-            border-left: 4px solid #667eea;
-            padding: 20px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 30px;
             margin: 30px 0;
-            border-radius: 4px;
             text-align: center;
         }
-        .reference-code label {
-            display: block;
+        .otp-label {
             font-size: 14px;
             color: #666;
-            margin-bottom: 8px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            margin-bottom: 10px;
         }
-        .reference-code-content {
+        .otp-content {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 15px;
             flex-wrap: wrap;
         }
-        .reference-code .code {
-            font-size: 24px;
-            font-weight: bold;
+        .otp-code {
+            font-size: 48px;
+            font-weight: 700;
             color: #667eea;
+            letter-spacing: 8px;
             font-family: 'Courier New', monospace;
-            letter-spacing: 2px;
             margin: 0;
         }
         .copy-button {
@@ -94,83 +94,106 @@
         .copy-button:active {
             background-color: #764ba2;
         }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #856404;
+            font-size: 14px;
+        }
         .footer {
+            background-color: #f8f9fa;
             padding: 20px 30px;
-            background-color: #f9f9f9;
-            border-top: 1px solid #eee;
-            font-size: 12px;
-            color: #999;
             text-align: center;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #666;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
         }
         .button {
             display: inline-block;
             background-color: #667eea;
             color: white;
             padding: 12px 30px;
+            border-radius: 6px;
             text-decoration: none;
-            border-radius: 4px;
             margin: 20px 0;
             font-weight: 600;
+            transition: background-color 0.3s;
         }
         .button:hover {
-            background-color: #764ba2;
+            background-color: #5568d3;
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Header -->
         <div class="header">
-            <h1>🎉 Congratulations!</h1>
-            <p>Your Application is Approved</p>
+            <h1>Email Verification</h1>
         </div>
-        
+
+        <!-- Content -->
         <div class="content">
-            <div class="greeting">
-                Hello {{ first_name }},
-            </div>
-            
+            {% if first_name %}
+                <div class="greeting">Hello {{ first_name }},</div>
+            {% else %}
+                <div class="greeting">Hello,</div>
+            {% endif %}
+
             <div class="message">
-                <p>We're delighted to inform you that your application has been <strong>approved</strong>!</p>
-                <p>Your application review was successful, and we're excited to have you on board.</p>
+                We received a request to verify your email address. Please use the following One-Time Password (OTP) to complete your verification:
             </div>
-            
-            <div class="reference-code">
-                <label>Your Reference Code</label>
-                <div class="reference-code-content">
-                    <div class="code" id="referenceCode">{{ reference_code }}</div>
-                    <button class="copy-button" onclick="copyToClipboard('referenceCode')">📋 Copy</button>
+
+            <!-- OTP Display -->
+            <div class="otp-container">
+                <div class="otp-label">Your Verification Code</div>
+                <div class="otp-content">
+                    <p class="otp-code" id="otpCode">{{ otp }}</p>
+                    <button class="copy-button" onclick="copyToClipboard('otpCode')">📋 Copy</button>
                 </div>
             </div>
-            
-            <div class="message">
-                <p>Please save your reference code for future reference. You can use this code to:</p>
-                <ul>
-                    <li>Track your application status</li>
-                    <li>Access your account dashboard</li>
-                    <li>Contact support with inquiries</li>
-                </ul>
+
+            <!-- Warning -->
+            <div class="warning">
+                <strong>⚠️ Security Notice:</strong> This code is valid for 10 minutes only. Never share this code with anyone, including CRTD staff. We will never ask you for this code via email or phone.
             </div>
-            
-            <center>
-                <a href="https://crtdplatform.com/dashboard" class="button">Go to Dashboard</a>
-            </center>
-            
+
             <div class="message">
-                <p>If you have any questions, please don't hesitate to contact our support team.</p>
-                <p>Best regards,<br><strong>The CRTD Team</strong></p>
+                If you didn't request this verification, you can safely ignore this email. Your account will remain secure.
+            </div>
+
+            <div class="message">
+                If you have any questions or need assistance, please contact our support team.
             </div>
         </div>
-        
+
+        <!-- Footer -->
         <div class="footer">
-            <p>&copy; 2026 CRTD Recruitment Platform. All rights reserved.</p>
-            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; {% if current_year %}{{ current_year }}{% else %}2026{% endif %} CRTD. All rights reserved.</p>
+            <p>
+                <a href="#">Privacy Policy</a> | 
+                <a href="#">Terms of Service</a> | 
+                <a href="#">Contact Us</a>
+            </p>
+            <p style="margin-top: 15px; color: #999;">
+                This is an automated email, please do not reply directly to this message.
+            </p>
         </div>
     </div>
     <script>
         function copyToClipboard(elementId) {
             var text = document.getElementById(elementId).innerText;
             navigator.clipboard.writeText(text).then(function() {
-                alert('Code copied to clipboard!');
+                alert('OTP copied to clipboard!');
             }).catch(function(err) {
                 console.error('Could not copy text: ', err);
             });
