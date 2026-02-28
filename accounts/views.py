@@ -10,9 +10,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .serializers import RoleBasedRegisterSerializer as RegisterSerializer
 from .serializers import GoogleAuthSerializer
-
+from drf_yasg.utils import swagger_auto_schema
 User = get_user_model()
-
+from pre_application.models import ReferalCode , PreApplication
+from rest_framework.generics import get_object_or_404
+from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
+from django.db import transaction
 
 class GoogleAuthView(APIView):
 	permission_classes = [AllowAny]
@@ -92,42 +95,96 @@ class GoogleAuthView(APIView):
 # -------------------------------------------------------
 # REGISTER VIEW
 # -------------------------------------------------------
+class RegisterAPIView(APIView):
+    permission_classes = [AllowAny]
 
-class RegisterView(APIView):
-    """
-    Handles user registration.
-
-    Accepts:
-    - email
-    - password
-    - confirm_password
-    - role
-
-    Returns:
-    - Success message
-    - Basic user info
-    """
-
-    permission_classes = [AllowAny]  # Anyone can register
-
+    @swagger_auto_schema(
+        request_body=RegisterSerializer,
+        responses={201: "Created", 400: "Bad Request"}
+    )
+    @transaction.atomic
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
 
-        if serializer.is_valid():
-            user = serializer.save()
-
+        referral_code = request.data.get("referral_code")
+        if not referral_code:
             return Response(
-                {
-                    "message": "User registered successfully.",
-                    "email": user.email,
-                    "role": user.role
-                },
-                status=status.HTTP_201_CREATED
+                {"error": "Referral code is required."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # 1️⃣ Get referral object
+        referral = get_object_or_404(ReferalCode, code=referral_code)
 
+        # 2️⃣ Validate referral
+        if referral.is_used:
+            return Response(
+                {"error": "Referral code already used."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        pre_app = referral.student  # your FK name
+
+        if not pre_app.verified:
+            return Response(
+                {"error": "Pre-application not verified yet."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3️⃣ Register user
+        data = {
+            "email": request.data.get("email"),
+            "password": request.data.get("password"),
+			"confirm_password": request.data.get("password"),
+            "role": "student"
+        }
+
+        serializer = RegisterSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        # 4️⃣ Create Student
+        student = Student.objects.create(
+            user=user,
+            enrollment_id=f"ENR-{pre_app.id}"
+        )
+
+        # 5️⃣ Personal Detail
+        StudentPersonalDetail.objects.create(
+            student=student,
+            first_name=pre_app.first_name,
+            last_name=pre_app.last_name,
+            email=pre_app.email,
+            whatsapp_no=pre_app.whatsapp_no,
+            alternate_phone=pre_app.alternate_phone,
+            birthplace_state=pre_app.birthplace_state
+        )
+
+        # 6️⃣ Education
+        StudentEducation.objects.create(
+            student=student,
+            qualification=pre_app.qualification,
+            specialization=pre_app.specialization,
+            college_name=pre_app.college_name,
+            college_state=pre_app.college_state,
+            passing_year=pre_app.passing_year
+        )
+
+        # 7️⃣ Career Preference
+        StudentCareerPreference.objects.create(
+            student=student,
+            preferred_time=pre_app.preferred_time
+        )
+        referral.delete()
+        pre_app.delete()
+
+        return Response(
+            {
+                "message": "User registered successfully.",
+                "email": user.email,
+                "role": user.role
+            },
+            status=status.HTTP_201_CREATED
+        )
 # -------------------------------------------------------
 # LOGIN VIEW (JWT TOKEN GENERATION)
 # -------------------------------------------------------

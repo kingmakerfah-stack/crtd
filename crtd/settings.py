@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'pre_application',
     'accounts',
+    'Student',
 ]
 
 MIDDLEWARE = [
