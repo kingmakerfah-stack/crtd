@@ -1,14 +1,18 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
+from .views import RegisterView, LoginView
 from .token_serializer import CustomTokenObtainPairView
 from .views import GoogleAuthView
 
 urlpatterns = [
 
-    # Login endpoint (email + password)
-    path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # Registration endpoint
+    path('register/', RegisterView.as_view(), name='register'),
 
-    # Refresh token endpoint
+    # Custom login endpoint that returns JWT token with extra data (email + role)
+    path('login/', LoginView.as_view(), name='token_obtain_pair'),
+
+    # Refresh Access Token
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # Google OAuth endpoint
