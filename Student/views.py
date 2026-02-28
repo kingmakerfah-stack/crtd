@@ -11,37 +11,139 @@ from rest_framework.exceptions import ValidationError
 
 # user id to student root model.
 def student_id(id):
-    return Student.objects.get(User=id) 
+    return Student.objects.get(user=id) 
+
+class StudentDataView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get(self, request):
+        student = student_id(request.user.id)  # Cleanest way
+
+        personal_detail = getattr(student, "personal_detail", None)
+        education = getattr(student, "education", None)
+        career_preference = getattr(student, "career_preference", None)
+
+        data = {
+            "personal_detail": StudentPersonalDetailSerializer(personal_detail).data if personal_detail else None,
+            "education": StudentEducationSerializer(education).data if education else None,
+            "career_preference": StudentCareerPreferenceSerializer(career_preference).data if career_preference else None,
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+    
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.exceptions import NotFound
+from accounts.permissions import IsStudent
 
 
 class StudentPersonalDetails(APIView):
     permission_classes = [IsAuthenticated, IsStudent]
 
-    def get(self, request):
+    def get_object(self, request):
         student = request.user.student_profile
-
         try:
-            personal_detail = student.personal_detail
+            return student.personal_detail
         except StudentPersonalDetail.DoesNotExist:
-            return Response(
-                {"detail": "Personal details not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            raise NotFound("Personal details not found.")
 
-        serializer = StudentPersonalDetailSerializer(personal_detail)
-        return Response(serializer.data)
+    # 🔵 FULL UPDATE
+    def put(self, request):
+        personal_detail = self.get_object(request)
 
-    def post(self, request):
+        serializer = StudentPersonalDetailSerializer(
+            personal_detail,
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # 🟢 PARTIAL UPDATE
+    def patch(self, request):
+        personal_detail = self.get_object(request)
+
+        serializer = StudentPersonalDetailSerializer(
+            personal_detail,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+class StudentEducationView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get_object(self, request):
         student = request.user.student_profile
+        try:
+            return student.education
+        except StudentEducation.DoesNotExist:
+            raise NotFound("Education details not found.")
 
-        # Prevent duplicate
-        if hasattr(student, "personal_detail"):
-            raise ValidationError("Personal detail already exists.")
+    def put(self, request):
+        education = self.get_object(request)
 
-        serializer = StudentPersonalDetailSerializer(data=request.data)
+        serializer = StudentEducationSerializer(
+            education,
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
 
-        if serializer.is_valid():
-            serializer.save(student=student)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def patch(self, request):
+        education = self.get_object(request)
+
+        serializer = StudentEducationSerializer(
+            education,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class StudentCareerPreferenceView(APIView):
+    permission_classes = [IsAuthenticated, IsStudent]
+
+    def get_object(self, request):
+        student = request.user.student_profile
+        try:
+            return student.career_preference
+        except StudentCareerPreference.DoesNotExist:
+            raise NotFound("Career preference not found.")
+
+    def put(self, request):
+        career = self.get_object(request)
+
+        serializer = StudentCareerPreferenceSerializer(
+            career,
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        career = self.get_object(request)
+
+        serializer = StudentCareerPreferenceSerializer(
+            career,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
