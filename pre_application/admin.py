@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from .models import PreApplication
+from .models import PreApplication,ReferalCode
 
 
 @admin.register(PreApplication)
@@ -16,3 +16,4 @@ class PreApplicationAdmin(admin.ModelAdmin):
         )
 
     create_referral_button.short_description = "Referral"
+admin.site.register(ReferalCode)

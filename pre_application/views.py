@@ -9,8 +9,8 @@ from utils.email_service import EmailService
 from rest_framework.generics import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-
-
+from .models import ReferalCode
+from rest_framework.permissions import AllowAny
 class PreApplicationCreateView(APIView):
     @swagger_auto_schema(
         request_body=PreApplicationSerializer,
@@ -106,3 +106,53 @@ class CreateReferralAPIView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+# referal code view to check if the referal code is valid or not and return the pre application details if valid
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
+
+
+class CheckReferralCodeAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Validate referral code",
+        description="Check if a referral code is valid and return associated pre-application details.",
+        parameters=[
+            OpenApiParameter(
+                name="code",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.PATH,
+                description="Referral code to validate",
+                required=True,
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="Referral code is valid",
+                response={
+                    "type": "object",
+                    "properties": {
+                        "first_name": {"type": "string"},
+                        "last_name": {"type": "string"},
+                        "email": {"type": "string"},
+                        "whatsapp_no": {"type": "string"},
+                        "alternate_phone": {"type": "string"},
+                    },
+                },
+            ),
+            404: OpenApiResponse(description="Referral code not found"),
+        },
+    )
+    def get(self, request, code):
+        referral = get_object_or_404(ReferalCode, code=code)
+        pre_app = referral.student
+
+        return Response({
+            "first_name": pre_app.first_name,
+            "last_name": pre_app.last_name,
+            "email": pre_app.email,
+            "whatsapp_no": pre_app.whatsapp_no,
+            "alternate_phone": pre_app.alternate_phone,
+        }, status=status.HTTP_200_OK)
