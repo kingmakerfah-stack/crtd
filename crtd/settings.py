@@ -159,3 +159,24 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS')
 DEFAULT_FROM_EMAIL = 'muharibfah@gmail.com'
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
+
+# -------------------------------------------------------
+# DRF + JWT CONFIGURATION
+# -------------------------------------------------------
+
+REST_FRAMEWORK = {
+    # Use JWT for authentication
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+
+    # Default permission (can override in views later)
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+
+# GOOGLE OAUTH CONFIGURATION
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
