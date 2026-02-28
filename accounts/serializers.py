@@ -36,3 +36,12 @@ class RoleBasedRegisterSerializer(serializers.ModelSerializer):
         )
 
         return user
+
+
+class GoogleAuthSerializer(serializers.Serializer):
+    id_token = serializers.CharField(write_only=True)
+    role = serializers.ChoiceField(
+        choices=User.ROLE_CHOICES,
+        required=False,
+        allow_null=True
+    )
