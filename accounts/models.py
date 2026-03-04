@@ -49,7 +49,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    # email_verified = models.BooleanField(default=False)
+    email_verified = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -62,29 +62,31 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return f"{self.email} - {self.role}"
 
 
-# class EmailOTP(models.Model):
-#     """
-#     Model to store OTPs for email verification.
+class EmailOTP(models.Model):
+    """
+    Model to store OTPs for email verification.
     
-#     Each OTP is associated with a user and has an expiration time.
-#     Old OTPs should be cleaned up periodically.
-#     """
-#     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='email_otp')
-#     otp = models.CharField(max_length=10)
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     expires_at = models.DateTimeField()
-#     is_verified = models.BooleanField(default=False)
+    Each OTP is associated with a user and has an expiration time.
+    Old OTPs should be cleaned up periodically.
+    """
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='email_otp')
+    otp = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_verified = models.BooleanField(default=False)
 
-#     class Meta:
-#         db_table = 'accounts_email_otp'
+    class Meta:
+        db_table = 'accounts_email_otp'
 
-#     def __str__(self):
-#         return f"OTP for {self.user.email}"
+    def __str__(self):
+        return f"OTP for {self.user.email}"
     
-#     def is_valid(self):
-#         """Check if OTP is still valid (not expired and not yet used)."""
-#         return not self.is_verified and timezone.now() < self.expires_at
+    def is_valid(self):
+        """Check if OTP is still valid (not expired and not yet used)."""
+        from django.utils import timezone
+        return not self.is_verified and timezone.now() < self.expires_at
     
-#     def is_expired(self):
-#         """Check if OTP has expired."""
-#         return timezone.now() > self.expires_at
+    def is_expired(self):
+        """Check if OTP has expired."""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
