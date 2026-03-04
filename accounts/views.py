@@ -231,3 +231,107 @@ class LoginView(APIView):
             {"error": "Invalid email or password."},
             status=status.HTTP_401_UNAUTHORIZED
         )
+
+
+# -------------------------------------------------------
+# OTP VERIFICATION VIEWS
+# -------------------------------------------------------
+
+class OTPRequestView(APIView):
+    """
+    Endpoint to request OTP for email verification.
+    
+    This endpoint generates an OTP, stores it in the database, and queues
+    an email through Celery workers for asynchronous sending.
+    
+    Accepts:
+    - email: The user's email address
+    
+    Returns:
+    - Success message with email address if OTP was queued successfully
+    - Error message if user not found or any other error occurs
+    
+    Architecture:
+    - OTP generation: synchronous (happens immediately)
+    - OTP storage: synchronous (happens immediately)
+    - Email sending: asynchronous (queued to Celery workers)
+    - API Response: returns immediately without waiting for email send
+    
+    Example cURL:
+        curl -X POST http://localhost:8000/api/accounts/otp/request/ \
+          -H "Content-Type: application/json" \
+          -d '{"email": "user@example.com"}'
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .serializers import OTPRequestSerializer
+        from utils.email_service import EmailService
+        
+        serializer = OTPRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        user = User.objects.get(email=email)
+        
+        # Generate OTP, store it, and queue email to Celery
+        otp_code, otp_instance, email_task = EmailService.send_verification_otp(user)
+        
+        return Response(
+            {
+                "message": "OTP has been sent to your email address.",
+                "email": email,
+                "email_task_id": email_task.id if email_task else None
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class OTPVerificationView(APIView):
+    """
+    Endpoint to verify OTP code.
+    
+    Accepts:
+    - email: The user's email address
+    - otp: The OTP code (4-6 digits)
+    
+    Returns:
+    - JWT tokens if OTP is valid
+    - Error message if OTP is invalid, expired, or doesn't match
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .serializers import OTPVerificationSerializer
+        from utils.email_service import EmailService
+        
+        serializer = OTPVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        otp_code = serializer.validated_data['otp']
+        
+        user = User.objects.get(email=email)
+        
+        # Verify OTP
+        result = EmailService.verify_otp(user, otp_code)
+        
+        if not result['success']:
+            return Response(
+                {"error": result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        
+        return Response(
+            {
+                "message": "Email verified successfully.",
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "email": user.email,
+                "role": user.role
+            },
+            status=status.HTTP_200_OK
+        )
