@@ -45,3 +45,28 @@ class GoogleAuthSerializer(serializers.Serializer):
         required=False,
         allow_null=True
     )
+
+
+class OTPRequestSerializer(serializers.Serializer):
+    """Serializer for requesting OTP verification email."""
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError(
+                "No user found with this email address."
+            )
+        return value
+
+
+class OTPVerificationSerializer(serializers.Serializer):
+    """Serializer for verifying OTP code."""
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=10)
+
+    def validate_email(self, value):
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError(
+                "No user found with this email address."
+            )
+        return value
