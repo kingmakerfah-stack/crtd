@@ -97,4 +97,40 @@ class StudentCareerPreference(models.Model):
     expected_ctc = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.student.user.email if self.student and self.student.user else 'Career'}"    
+        return f"{self.student.user.email if self.student and self.student.user else 'Career'}"
+
+
+class StudentOTP(models.Model):
+    """
+    Model to store OTPs for student email verification during registration.
+    
+    This model links OTP with Student records using OneToOneField.
+    Each student can have only one active OTP at a time.
+    """
+    student = models.OneToOneField(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='otp_verification'
+    )
+    otp = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_verified = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'student_otp'
+        verbose_name = 'Student OTP'
+        verbose_name_plural = 'Student OTPs'
+
+    def __str__(self):
+        return f"OTP for {self.student.user.email if self.student and self.student.user else 'Student'}"
+    
+    def is_valid(self):
+        """Check if OTP is still valid (not expired and not yet used)."""
+        from django.utils import timezone
+        return not self.is_verified and timezone.now() < self.expires_at
+    
+    def is_expired(self):
+        """Check if OTP has expired."""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
