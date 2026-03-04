@@ -1,28 +1,29 @@
-import threading
 import random
 import string
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
+from utils.tasks import send_otp_email_task, send_approval_email_task, send_html_email_task
 
 
-class EmailThread(threading.Thread):
+# NOTE: Threading approach has been replaced with Celery for scalability.
+# The EmailThread class is deprecated but kept for reference.
+# All email sending now goes through Celery task queues for better performance,
+# reliability, and the ability to scale to handle 1 lakh+ users.
+class EmailThread:
     """
-    Background thread for asynchronous email sending.
+    DEPRECATED: Use Celery tasks instead.
     
-    This worker runs in the background, ensuring that SMTP operations
-    do not block API responses.
+    This class is kept for backward compatibility but should not be used.
+    All email operations now go through Celery task queues.
+    
+    For more info, see utils/tasks.py
     """
-    
     def __init__(self, email_message):
         self.email_message = email_message
-        super().__init__()
-
-    def run(self):
-        """Send the email message in the background thread."""
-        self.email_message.send(fail_silently=False)
+        raise NotImplementedError(
+            "EmailThread is deprecated. Use Celery tasks from utils/tasks.py instead."
+        )
 
 
 def generate_otp(length=4):
@@ -74,119 +75,133 @@ class EmailService:
     """
     Generic email service for the recruitment platform.
     
-    Provides reusable methods for sending templated emails asynchronously.
+    Provides reusable methods for sending templated emails asynchronously via Celery.
     The context dictionary allows passing any dynamic variables to templates
     without changing the function signature.
+    
+    Architecture:
+    - All email operations are queued as Celery tasks
+    - Tasks are processed by Celery workers (can be scaled horizontally)
+    - Results are stored in Redis with automatic expiration
+    - Failed tasks automatically retry with exponential backoff
+    - Suitable for handling 1 lakh+ concurrent users
+    
+    Benefits over Threading:
+    ✅ Horizontal scalability (add more workers)
+    ✅ Persistence (tasks survive server restarts)
+    ✅ Monitoring (track task status)
+    ✅ Priority queues (process critical emails first)
+    ✅ Rate limiting (control email sending rate)
+    ✅ Distributed processing (across multiple servers)
     """
     
     @staticmethod
     def send_html_email(subject, template_name, context, to_emails):
         """
-        Generic method to send HTML emails asynchronously.
+        Queue an HTML email task for asynchronous sending via Celery.
         
-        This method renders a Django template with the provided context,
-        creates an email with HTML content and plain-text fallback, and
-        sends it asynchronously using a background worker thread.
+        This method queues a task to Celery instead of sending immediately.
+        The actual email sending happens in a background worker process.
         
         Args:
             subject (str): The email subject line.
             template_name (str): The path to the HTML email template.
             context (dict): A dictionary containing variables to inject into the template.
-                          This design allows passing any dynamic data without changing
-                          the function signature.
             to_emails (list): A list of recipient email addresses.
+        
+        Returns:
+            celery.AsyncResult: Task result object that can be used to track status
         
         Example:
             context = {'first_name': 'John', 'reference_code': 'ABC123'}
-            EmailService.send_html_email(
+            task_result = EmailService.send_html_email(
                 subject='Your Application is Approved',
                 template_name='emails/approval_email.html',
                 context=context,
                 to_emails=['john@example.com']
             )
+            # Check task status
+            print(task_result.state)  # PENDING, STARTED, SUCCESS, FAILURE
+        
+        Behavior:
+            - Function returns immediately (non-blocking)
+            - Email is sent asynchronously by Celery worker
+            - Failed emails automatically retry up to 3 times
+            - Task result is stored in Redis for tracking
         """
-        # Render the HTML template with context
-        html_content = render_to_string(template_name, context)
-        
-        # Generate plain-text fallback from context
-        plain_text_fallback = f"Email from {settings.DEFAULT_FROM_EMAIL}"
-        
-        # Create the email message
-        email_message = EmailMultiAlternatives(
+        # Queue the email task to Celery
+        task_result = send_html_email_task.delay(
             subject=subject,
-            body=plain_text_fallback,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=to_emails
+            template_name=template_name,
+            context=context,
+            to_emails=to_emails
         )
-        
-        # Attach HTML alternative
-        email_message.attach_alternative(html_content, "text/html")
-        
-        # Send asynchronously in background thread
-        EmailThread(email_message).start()
+        return task_result
     
     @staticmethod
     def send_approval_email(user_email, context):
         """
-        Sends an approval email to a user.
+        Queue an approval email task for asynchronous sending.
         
-        This is a specific wrapper around send_html_email, demonstrating how to
-        create domain-specific email methods for the platform.
+        This is a specific wrapper around send_html_email that queues approval
+        emails to Celery workers.
         
         Args:
             user_email (str): The recipient's email address.
             context (dict): A dictionary containing:
                           - first_name (str): User's first name
                           - reference_code (str): User's approval reference code
+                          - Any other variables for the template
+        
+        Returns:
+            celery.AsyncResult: Task result object for tracking
         
         Example:
             context = {'first_name': 'Alice', 'reference_code': 'CRTD-2026-001'}
-            EmailService.send_approval_email('alice@example.com', context)
+            task_result = EmailService.send_approval_email('alice@example.com', context)
+            print(f"Task ID: {task_result.id}")
         """
-        EmailService.send_html_email(
-            subject="Your Application is Approved",
-            template_name="emails/approval_email.html",
-            context=context,
-            to_emails=[user_email]
+        task_result = send_approval_email_task.delay(
+            user_email=user_email,
+            context=context
         )
+        return task_result
     
     @staticmethod
     def send_otp_email(user_email, otp, context=None):
         """
-        Sends an OTP (One-Time Password) email to a user for email verification.
+        Queue an OTP email task for asynchronous sending via Celery.
         
-        This method is called after user registration to send a verification OTP.
+        This method queues the OTP email to Celery workers for sending.
         The OTP should already be stored in the database before calling this method.
         
         Workflow:
         1. User registers with email and password
         2. System generates OTP using generate_otp()
         3. OTP is stored in EmailOTP model with expiration time
-        4. This method sends the OTP to user's email asynchronously
-        5. User receives email with OTP and submits it for verification
-        6. System verifies OTP against database record
-        7. If valid, user's email_verified flag is set to True
+        4. This method queues the OTP email task
+        5. Celery worker picks up the task and sends email
+        6. User receives email with OTP
+        7. User submits OTP for verification
+        8. System verifies OTP against database record
         
         Args:
             user_email (str): The recipient's email address.
             otp (str): The OTP code to send (typically 4-6 digits).
-                      Should match the code stored in EmailOTP model.
             context (dict, optional): Additional variables for email template.
                                     Common keys:
-                                    - 'first_name' (str): User's first name
-                                    - 'current_year' (int): Current year for footer
-                                    - Any other template variables
+                                    - 'first_name': User's first name
+                                    - 'current_year': Current year for footer
                                     Defaults to empty dict if not provided.
         
         Returns:
-            None - Sends email asynchronously in background thread
+            celery.AsyncResult: Task result object for tracking status
         
         Example Usage:
             from utils.email_service import generate_otp, EmailService
             from accounts.models import EmailOTP, CustomUser
             from django.utils import timezone
             from datetime import timedelta
-            import datetime
             
             # After user registration
             user = CustomUser.objects.get(email='user@example.com')
@@ -201,82 +216,80 @@ class EmailService:
                 expires_at=timezone.now() + timedelta(minutes=10)
             )
             
-            # Step 3: Send OTP email
-            EmailService.send_otp_email(
+            # Step 3: Queue OTP email task
+            task_result = EmailService.send_otp_email(
                 user_email='user@example.com',
                 otp=otp_code,
                 context={
-                    'first_name': user.first_name or 'User',
-                    'current_year': datetime.datetime.now().year
+                    'first_name': user.email.split('@')[0],
+                    'current_year': timezone.now().year
                 }
             )
-            # User receives email with OTP like '7392' prominently displayed
+            
+            # Check task status anytime
+            print(f"Task ID: {task_result.id}")
+            print(f"Task State: {task_result.state}")  # PENDING, STARTED, SUCCESS, FAILURE
         
         Email Template:
             - Sends using: templates/emails/otp_email.html
             - Subject: "Your OTP for Verification"
             - Method: HTML email with plain text fallback
-            - Execution: Asynchronous (doesn't block API response)
+            - Execution: Asynchronous (returns immediately)
+        
+        Scalability Benefits:
+            - Email sending doesn't block API response (return immediately)
+            - Celery workers can be scaled horizontally
+            - Task status can be monitored in real-time
+            - Failed emails automatically retry up to 3 times
+            - Can handle 1 lakh+ concurrent users
         
         Security Considerations:
-            - Email is sent asynchronously in background thread
-            - OTP is not logged anywhere in this method
+            - Email is sent asynchronously (not in request thread)
+            - OTP is not logged in this method
             - Email should only be sent after OTP is stored in DB
-            - The method assumes OTP is already generated and stored
-            - Template includes security warning about OTP expiration
-        
-        Common Issues & Solutions:
-            1. Email not received?
-               - Check email service configuration in settings.py
-               - Verify EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in .env
-               - Check spam folder
-            
-            2. Wrong recipient getting email?
-               - Ensure user_email parameter is correct
-               - Check CustomUser.objects.get(email=...) result
-            
-            3. OTP in email doesn't match what's in database?
-               - Ensure same otp_code is used in generate and send
-               - Check for type mismatch (int vs str)
+            - Template includes expiration warning
+            - Task is persisted in Redis even if server restarts
         """
         if context is None:
             context = {}
         
-        # Add OTP to the template context
-        # This makes '{{ otp }}' available in otp_email.html template
-        context['otp'] = otp
-        
-        # Send email using the generic send_html_email method
-        # The email is sent asynchronously in a background thread
-        # so the function returns immediately without blocking
-        EmailService.send_html_email(
-            subject="Your OTP for Verification",
-            template_name="emails/otp_email.html",  # Path to OTP email template
-            context=context,  # Template variables (otp, first_name, etc.)
-            to_emails=[user_email]  # List of recipient emails
+        # Queue the OTP email task to Celery
+        task_result = send_otp_email_task.delay(
+            user_email=user_email,
+            otp=otp,
+            context=context
         )
+        return task_result
     
     @staticmethod
     def send_verification_otp(user, expiration_minutes=10):
         """
-        Generates an OTP, stores it in the database, and sends it to the user's email.
+        Generates an OTP, stores it in the database, and queues email via Celery.
         
         This is the complete workflow for sending verification OTPs after registration.
-        The OTP is stored in the EmailOTP model with an expiration time.
+        The OTP is stored in the EmailOTP model with an expiration time, and the email
+        is queued to Celery workers for asynchronous sending.
         
         Args:
             user: The CustomUser instance to send OTP to.
             expiration_minutes (int): How long the OTP is valid for (default 10 minutes).
         
         Returns:
-            tuple: (otp_code, email_otp_instance)
+            tuple: (otp_code, email_otp_instance, task_result)
+                - otp_code: The generated OTP string
+                - email_otp_instance: The EmailOTP model instance
+                - task_result: Celery AsyncResult for tracking email task
         
         Example:
             from accounts.models import CustomUser
             from utils.email_service import EmailService
             
             user = CustomUser.objects.get(email='user@example.com')
-            otp_code, otp_instance = EmailService.send_verification_otp(user)
+            otp_code, otp_instance, task = EmailService.send_verification_otp(user)
+            
+            # Check email task status
+            print(f"Email Task ID: {task.id}")
+            print(f"Email Task State: {task.state}")
         """
         from accounts.models import EmailOTP
         
@@ -293,14 +306,16 @@ class EmailService:
             }
         )
         
-        # Send email
+        # Prepare context for email template
         context = {
-            'first_name': user.email.split('@')[0],  # Use part of email as fallback
+            'first_name': user.email.split('@')[0] if '@' in user.email else user.email,
             'current_year': timezone.now().year
         }
-        EmailService.send_otp_email(user.email, otp_code, context)
         
-        return otp_code, otp_instance
+        # Queue email task to Celery
+        task_result = EmailService.send_otp_email(user.email, otp_code, context)
+        
+        return otp_code, otp_instance, task_result
     
     @staticmethod
     def verify_otp(user, otp_code):
