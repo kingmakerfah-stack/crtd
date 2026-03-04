@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import RegisterAPIView, LoginView
+from .views import RegisterAPIView, LoginView, OTPRequestView, OTPVerificationView
 from .token_serializer import CustomTokenObtainPairView
 from .views import GoogleAuthView
 
@@ -17,4 +17,8 @@ urlpatterns = [
 
     # Google OAuth endpoint
     path('google/', GoogleAuthView.as_view(), name='google_auth'),
+
+    # OTP endpoints for email verification
+    path('otp/request/', OTPRequestView.as_view(), name='otp_request'),
+    path('otp/verify/', OTPVerificationView.as_view(), name='otp_verify'),
 ]
