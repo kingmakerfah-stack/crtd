@@ -10,7 +10,7 @@ from rest_framework.generics import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .models import ReferalCode
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny,IsAuthenticated
 class PreApplicationCreateView(APIView):
     @swagger_auto_schema(
         request_body=PreApplicationSerializer,
@@ -51,6 +51,7 @@ class ReferalCodeCreateView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CreateReferralAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     """
     Create a referral code for a pre-application and send approval email.
     
