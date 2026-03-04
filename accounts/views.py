@@ -17,9 +17,18 @@ from rest_framework.generics import get_object_or_404
 from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
 from django.db import transaction
 
+
 class GoogleAuthView(APIView):
 	permission_classes = [AllowAny]
-
+	@swagger_auto_schema(
+    request_body=GoogleAuthSerializer,
+    responses={
+        200: "Login successful.",
+        400: "Invalid Google token or role mismatch.",
+        500: "Google OAuth client ID is not configured."
+    },
+    operation_description="Authenticate user using Google ID token."
+    )
 	def post(self, request):
 		serializer = GoogleAuthSerializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -203,7 +212,13 @@ class LoginView(APIView):
     """
 
     permission_classes = [AllowAny]  # Anyone can attempt login
-
+    @swagger_auto_schema(
+    responses={
+        200: "Login successful.",
+        401: "Invalid email or password."
+    },
+    operation_description="Login user using email and password."
+    )
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
