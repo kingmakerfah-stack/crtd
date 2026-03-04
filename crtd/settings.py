@@ -181,3 +181,83 @@ REST_FRAMEWORK = {
 # GOOGLE OAUTH CONFIGURATION
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
+
+
+# -------------------------------------------------------
+# CELERY CONFIGURATION
+# -------------------------------------------------------
+# Celery is used for asynchronous task processing, primarily for email sending.
+# This allows the application to handle 1 lakh+ concurrent users by scaling
+# Celery workers horizontally.
+
+# Message Broker - Redis
+# Redis performs both message broker (task queue) and result backend roles
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6380/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6380/0')
+
+# Task Configuration
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
+
+# Task Tracking
+CELERY_TASK_TRACK_STARTED = True
+
+# Time Limits
+CELERY_TASK_TIME_LIMIT = 30 * 60  # Hard limit: 30 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # Soft limit: 25 minutes
+
+# Results
+CELERY_RESULT_EXPIRES = 3600  # Results expire after 1 hour
+
+# Worker Configuration
+CELERY_WORKER_PREFETCH_MULTIPLIER = 4
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+
+# Retry Configuration
+CELERY_TASK_AUTORETRY_FOR = (Exception,)
+CELERY_TASK_MAX_RETRIES = 3
+
+# Beat Schedule (Periodic Tasks)
+CELERY_BEAT_SCHEDULE = {
+    'clean-expired-otps': {
+        'task': 'accounts.tasks.cleanup_expired_otps',
+        'schedule': 3600,  # Every hour (in seconds)
+        'options': {'queue': 'default'},
+    },
+    'process-pending-emails': {
+        'task': 'utils.tasks.process_pending_emails',
+        'schedule': 300,  # Every 5 minutes (in seconds)
+        'options': {'queue': 'default'},
+    },
+}
+
+# -------------------------------------------------------
+# Queues Configuration
+# -------------------------------------------------------
+# Define task queues for different purposes
+CELERY_QUEUES = {
+    'default': {
+        'exchange': 'default',
+        'binding_key': 'default',
+        'queue_arguments': {
+            'x-max-priority': 10,  # Max priority level
+        }
+    },
+    'email': {
+        'exchange': 'email',
+        'binding_key': 'email',
+        'queue_arguments': {
+            'x-max-priority': 10,
+        }
+    },
+    'scheduled': {
+        'exchange': 'scheduled',
+        'binding_key': 'scheduled',
+    },
+}
+
+# Default queue for tasks
+CELERY_DEFAULT_QUEUE = 'default'
