@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
-    'jobs',
+    'Jobs',
 ]
 
 MIDDLEWARE = [
