@@ -64,7 +64,13 @@ class StudentPersonalDetails(APIView):
             400: "Validation Error",
             404: "Personal details not found."
         },
-        operation_description="Fully update student personal details."
+        operation_description="""
+        Fully update the authenticated student's personal details.
+        This endpoint replaces the entire personal profile with the data provided in the request body.
+        Fields not included in the request may be set to null depending on serializer configuration.
+        
+        Frontend should send the complete object when performing a PUT request.
+        """
     )
     # 🔵 FULL UPDATE
     def put(self, request):
@@ -88,8 +94,14 @@ class StudentPersonalDetails(APIView):
             400: "Validation Error",
             404: "Personal details not found."
         },
-        operation_description="Partially update student personal details."
-    )
+        operation_description="""
+        Partially update the authenticated student's personal details.
+        This endpoint updates only the fields provided in the request body for the student's personal details.
+        Fields not included in the request will remain unchanged.
+
+        Frontend should send only the fields that need to be updated when performing a PATCH request.
+        """
+        )
     def patch(self, request):
         personal_detail = self.get_object(request)
 
@@ -122,7 +134,13 @@ class StudentEducationView(APIView):
         400: "Validation Error",
         404: "Education details not found."
     },
-    operation_description="Fully update student education details."
+    operation_description="""
+    Fully update the authenticated student's education details.
+    This endpoint replaces the entire education record with the data provided in the request body.
+    Fields not included in the request may be set to null depending on serializer configuration.
+
+    Frontend should send the complete object when performing a PUT request.
+    """
     )
     def put(self, request):
         education = self.get_object(request)
@@ -143,8 +161,14 @@ class StudentEducationView(APIView):
         400: "Validation Error",
         404: "Education details not found."
     },
-    operation_description="Partially update student education details."
-    )   
+    operation_description="""
+    Partially update the authenticated student's education details.
+    This endpoint updates only the fields provided in the request body for the student's education record.
+    Fields not included in the request will remain unchanged.
+
+    Frontend should send only the fields that need to be updated when performing a PATCH request.
+    """
+    )
     def patch(self, request):
         education = self.get_object(request)
 
@@ -175,7 +199,13 @@ class StudentCareerPreferenceView(APIView):
         400: "Validation Error",
         404: "Career preference not found."
     },
-    operation_description="Fully update student career preference details."
+    operation_description="""
+    Fully update the authenticated student's career preference details.
+    This endpoint replaces the entire career preference record with the data provided in the request body.
+    Fields not included in the request may be set to null depending on serializer configuration.
+
+    Frontend should send the complete object when performing a PUT request.
+    """
     )
     def put(self, request):
         career = self.get_object(request)
@@ -196,7 +226,13 @@ class StudentCareerPreferenceView(APIView):
         400: "Validation Error",
         404: "Career preference not found."
     },
-    operation_description="Partially update student career preference details."
+    operation_description="""
+    Partially update the authenticated student's career preference details.
+    This endpoint updates only the fields provided in the request body for the student's education record.
+    Fields not included in the request will remain unchanged.
+
+    Frontend should send only the fields that need to be updated when performing a PATCH request.
+    """
     )
     def patch(self, request):
         career = self.get_object(request)
@@ -229,7 +265,15 @@ class StudentOTPRequestView(APIView):
     - Success message if OTP was sent
     """
     permission_classes = [IsAuthenticated, IsStudent]
-
+    @swagger_auto_schema(
+    responses={
+        200: "OTP sent successfully.",
+        401: "Authentication credentials were not provided.",
+        403: "Permission denied.",
+        404: "Student profile not found."
+    },
+    operation_description="Request OTP for student email verification. This endpoint does not require any request body fields. OTP will be sent to the authenticated student's registered email."
+    )
     def post(self, request):
         from utils.email_service import EmailService, generate_otp
         from django.utils import timezone
@@ -285,7 +329,17 @@ class StudentOTPVerificationView(APIView):
     - Error message if OTP is invalid, expired, or doesn't match
     """
     permission_classes = [IsAuthenticated, IsStudent]
-
+    @swagger_auto_schema(
+    request_body=StudentOTPVerifySerializer,
+    responses={
+        200: "Email verified successfully.",
+        400: "Invalid OTP or OTP expired.",
+        401: "Authentication credentials were not provided.",
+        403: "Permission denied.",
+        404: "Student not found with this enrollment ID."
+    },
+    operation_description="Verify OTP sent to the student's registered email using enrollment ID and OTP code."
+    )
     def post(self, request):
         serializer = StudentOTPVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
