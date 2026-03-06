@@ -1,4 +1,4 @@
-"""
+﻿"""
 Celery tasks for email service operations.
 
 This module contains all asynchronous email tasks that are executed
@@ -20,7 +20,10 @@ Usage:
     print(result.state)  # PENDING, STARTED, SUCCESS, FAILURE
 """
 
-from celery import shared_task
+try:
+    from celery import shared_task
+except ModuleNotFoundError:
+    from utils.celery_compat import shared_task
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -281,3 +284,6 @@ def process_pending_emails():
         'message': 'Pending emails processed',
         'timestamp': timezone.now().isoformat()
     }
+
+
+
