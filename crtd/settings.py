@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'Student',
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     'payments',
 =======
     'jobs',
@@ -63,6 +64,13 @@ INSTALLED_APPS = [
 =======
     'Jobs',
 >>>>>>> dd40ac3 (feat: add Job model and serializer with validations)
+=======
+<<<<<<< Updated upstream
+    'jobs',
+=======
+    'admin_panel',
+>>>>>>> Stashed changes
+>>>>>>> 11de9c7 (Fix admin OTP flow and DB connection handling)
 ]
 
 MIDDLEWARE = [
@@ -109,10 +117,14 @@ if not DATABASE_URL:
         }
     }
 else:
+    # In local/debug shells (IPython/Jupyter), stale persistent connections are common.
+    # Default to non-persistent connections in DEBUG, while allowing env override.
+    db_conn_max_age = int(os.getenv("DB_CONN_MAX_AGE", "0" if DEBUG else "60"))
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600,
+            conn_max_age=db_conn_max_age,
+            conn_health_checks=True,
         )
     }
 
