@@ -55,10 +55,14 @@ INSTALLED_APPS = [
     'accounts',
     'Student',
 <<<<<<< HEAD
+<<<<<<< HEAD
     'payments',
 =======
     'jobs',
 >>>>>>> f2ce8d5 (create jobs app.)
+=======
+    'Jobs',
+>>>>>>> dd40ac3 (feat: add Job model and serializer with validations)
 ]
 
 MIDDLEWARE = [
