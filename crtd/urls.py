@@ -32,6 +32,8 @@ urlpatterns = [
     
     # Include accounts authentication routes
     path('api/accounts/', include('accounts.urls')),
+
+    path('api/jobs/',include('Jobs.urls')),
 ]
 
 if settings.DEBUG:
