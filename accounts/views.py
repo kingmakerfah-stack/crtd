@@ -282,16 +282,19 @@ class OTPRequestView(APIView):
     def post(self, request):
         from .serializers import OTPRequestSerializer
         from utils.email_service import EmailService
-        
+
         serializer = OTPRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         email = serializer.validated_data['email']
+        purpose = serializer.validated_data['purpose']
         user = User.objects.get(email=email)
-        
-        # Generate OTP, store it, and queue email to Celery
-        otp_code, otp_instance, email_task = EmailService.send_verification_otp(user)
-        
+
+        if purpose == 'password_reset':
+            otp_code, otp_instance, email_task = EmailService.send_password_reset_otp(user)
+        else:
+            otp_code, otp_instance, email_task = EmailService.send_verification_otp(user)
+
         return Response(
             {
                 "message": "OTP has been sent to your email address.",
@@ -319,34 +322,92 @@ class OTPVerificationView(APIView):
     def post(self, request):
         from .serializers import OTPVerificationSerializer
         from utils.email_service import EmailService
-        
+
         serializer = OTPVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         email = serializer.validated_data['email']
         otp_code = serializer.validated_data['otp']
-        
+        purpose = serializer.validated_data['purpose']
+
         user = User.objects.get(email=email)
-        
-        # Verify OTP
-        result = EmailService.verify_otp(user, otp_code)
-        
+
+        # Verify OTP against the correct purpose
+        result = EmailService.verify_otp(user, otp_code, purpose=purpose)
+
         if not result['success']:
             return Response(
                 {"error": result['message']},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        
+
+        # For email_verification: log the user in by returning tokens
+        # For password_reset: just confirm success — password change is a separate step
+        if purpose == 'email_verification':
+            refresh = RefreshToken.for_user(user)
+            return Response(
+                {
+                    "message": "Email verified successfully.",
+                    "refresh": str(refresh),
+                    "access": str(refresh.access_token),
+                    "email": user.email,
+                    "role": user.role
+                },
+                status=status.HTTP_200_OK
+            )
+
         return Response(
-            {
-                "message": "Email verified successfully.",
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-                "email": user.email,
-                "role": user.role
-            },
+            {"message": "OTP verified. You may now reset your password."},
+            status=status.HTTP_200_OK
+        )
+
+
+class PasswordResetView(APIView):
+    """
+    Final step of the forgot-password flow.
+
+    Accepts:
+    - email
+    - new_password
+
+    Checks that a verified password_reset OTP exists for this user,
+    sets the new password, then deletes the OTP record.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .serializers import PasswordResetSerializer
+        from accounts.models import EmailOTP
+
+        serializer = PasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        new_password = serializer.validated_data['new_password']
+
+        user = User.objects.get(email=email)
+
+        # Gate: a verified password_reset OTP must exist
+        try:
+            otp_instance = EmailOTP.objects.get(
+                user=user,
+                purpose='password_reset',
+                is_verified=True,
+            )
+        except EmailOTP.DoesNotExist:
+            return Response(
+                {"error": "OTP not verified. Please complete OTP verification first."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Set new password
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+
+        # Delete the OTP record so it cannot be reused
+        otp_instance.delete()
+
+        return Response(
+            {"message": "Password reset successfully. You can now log in."},
             status=status.HTTP_200_OK
         )
