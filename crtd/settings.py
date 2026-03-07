@@ -48,7 +48,12 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
+    'Jobs.apps.JobsConfig',
+    'admin_panel',
+
+
     'Jobs',
+
 ]
 
 MIDDLEWARE = [
