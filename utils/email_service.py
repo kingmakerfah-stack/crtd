@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 from django.conf import settings
 from django.utils import timezone
@@ -63,12 +63,12 @@ def generate_otp(length=4):
         EmailService.send_otp_email(user.email, otp)
     
     Security Notes:
-        - Uses random.choices() for cryptographically secure random selection
+        - Uses secrets.choice() for cryptographically secure random selection
         - Should always be stored with an expiration time (typically 10 minutes)
         - Should never be logged or exposed in error messages
         - The OTP should be sent via email, not SMS, for this implementation
     """
-    return ''.join(random.choices(string.digits, k=length))
+    return ''.join(secrets.choice(string.digits) for _ in range(length))
 
 
 class EmailService:
@@ -262,7 +262,7 @@ class EmailService:
         return task_result
     
     @staticmethod
-    def send_verification_otp(user, expiration_minutes=10):
+    def send_verification_otp(user, expiration_minutes=10, purpose='email_verification'):
         """
         Generates an OTP, stores it in the database, and queues email via Celery.
         
@@ -292,33 +292,58 @@ class EmailService:
             print(f"Email Task State: {task.state}")
         """
         from accounts.models import EmailOTP
-        
+
         # Generate OTP
         otp_code = generate_otp()
-        
-        # Create or update EmailOTP record
+
+        # Create or update EmailOTP record (also handles resend safely)
         otp_instance, created = EmailOTP.objects.update_or_create(
             user=user,
             defaults={
                 'otp': otp_code,
                 'expires_at': timezone.now() + timedelta(minutes=expiration_minutes),
-                'is_verified': False
+                'is_verified': False,
+                'purpose': purpose,
             }
         )
-        
+
+        # Try to get the actual first name from StudentPersonalDetail,
+        # fall back to the email prefix if the student profile doesn't exist yet.
+        try:
+            first_name = user.student_profile.personal_detail.first_name or user.email.split('@')[0]
+        except Exception:
+            first_name = user.email.split('@')[0]
+
         # Prepare context for email template
         context = {
-            'first_name': user.email.split('@')[0] if '@' in user.email else user.email,
-            'current_year': timezone.now().year
+            'first_name': first_name,
+            'current_year': timezone.now().year,
         }
-        
+
         # Queue email task to Celery
         task_result = EmailService.send_otp_email(user.email, otp_code, context)
-        
+
         return otp_code, otp_instance, task_result
+
+    @staticmethod
+    def send_password_reset_otp(user, expiration_minutes=10):
+        """
+        Convenience wrapper that generates and sends a password-reset OTP.
+
+        Identical to send_verification_otp() but tags the record with
+        purpose='password_reset' so the two flows never clash.
+
+        Returns:
+            tuple: (otp_code, email_otp_instance, task_result)
+        """
+        return EmailService.send_verification_otp(
+            user,
+            expiration_minutes=expiration_minutes,
+            purpose='password_reset',
+        )
     
     @staticmethod
-    def verify_otp(user, otp_code):
+    def verify_otp(user, otp_code, purpose='email_verification'):
         """
         Verifies the OTP provided by the user.
         
@@ -340,7 +365,7 @@ class EmailService:
                 print(result['message'])
         """
         from accounts.models import EmailOTP
-        
+
         try:
             otp_instance = EmailOTP.objects.get(user=user)
         except EmailOTP.DoesNotExist:
@@ -348,37 +373,45 @@ class EmailService:
                 'success': False,
                 'message': 'No OTP found. Please request a new one.'
             }
-        
+
+        # Ensure this OTP belongs to the correct flow
+        if otp_instance.purpose != purpose:
+            return {
+                'success': False,
+                'message': 'No OTP found for this action. Please request a new one.'
+            }
+
         # Check if expired
         if otp_instance.is_expired():
             return {
                 'success': False,
                 'message': 'OTP has expired. Please request a new one.'
             }
-        
+
         # Check if already verified
         if otp_instance.is_verified:
             return {
                 'success': False,
                 'message': 'OTP has already been used.'
             }
-        
+
         # Check if OTP matches
         if otp_instance.otp != otp_code:
             return {
                 'success': False,
                 'message': 'Invalid OTP. Please try again.'
             }
-        
+
         # Mark as verified
         otp_instance.is_verified = True
         otp_instance.save()
-        
-        # Update user's email_verified status
-        user.email_verified = True
-        user.save()
-        
+
+        # Only mark email_verified for the email_verification flow
+        if purpose == 'email_verification':
+            user.email_verified = True
+            user.save(update_fields=['email_verified'])
+
         return {
             'success': True,
-            'message': 'Email verified successfully!'
+            'message': 'OTP verified successfully!'
         }
