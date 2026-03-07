@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
-    # 'Jobs.apps.JobsConfig',
+    'Jobs.apps.JobsConfig',
     'admin_panel',
 
 
