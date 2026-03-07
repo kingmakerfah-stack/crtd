@@ -6,7 +6,11 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.utils import timezone
 from datetime import timedelta
 import random
+from accounts.models import CustomUser
 
+
+from django.db import models
+from accounts.models import CustomUser
 
 
 class AdminUser(models.Model):
@@ -22,15 +26,13 @@ class AdminUser(models.Model):
         ("inactive", "Inactive"),
     )
 
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name="admin_profile"
+    )
+
     name = models.CharField(max_length=255)
-
-    email = models.EmailField(
-        unique=True
-    )
-
-    password = models.CharField(
-        max_length=255
-    )
 
     role = models.CharField(
         max_length=20,
@@ -47,18 +49,8 @@ class AdminUser(models.Model):
         auto_now_add=True
     )
 
-    def save(self, *args, **kwargs):
-
-        if not self.password.startswith("pbkdf2"):
-            self.password = make_password(self.password)
-
-        super().save(*args, **kwargs)
-
-    def check_password(self, raw_password):
-        return check_password(raw_password, self.password)
-
     def __str__(self):
-        return self.email
+        return f"{self.user.email} - {self.role}"
 
 class AdminOTP(models.Model):
 
@@ -68,15 +60,11 @@ class AdminOTP(models.Model):
         related_name="otp"
     )
 
-    otp_code = models.CharField(
-        max_length=6
-    )
+    otp_code = models.CharField(max_length=6)
 
     otp_expiry = models.DateTimeField()
 
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def generate_otp(self):
 
@@ -91,13 +79,7 @@ class AdminOTP(models.Model):
 
     def is_valid(self, otp):
 
-        if self.otp_code == otp and timezone.now() < self.otp_expiry:
-            return True
-
-        return False
+        return self.otp_code == otp and timezone.now() < self.otp_expiry
 
     def __str__(self):
-        return f"{self.admin.email} - OTP {self.otp_code}"
-
-    def __repr__(self):
-        return f"<AdminOTP: {self.admin.email} - OTP {self.otp_code}>"
+        return f"{self.admin.user.email} - OTP {self.otp_code}"
