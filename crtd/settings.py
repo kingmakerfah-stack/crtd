@@ -48,11 +48,9 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
-<<<<<<< Updated upstream
-    'jobs',
-=======
+    # 'Jobs.apps.JobsConfig',
     'admin_panel',
->>>>>>> Stashed changes
+
 ]
 
 MIDDLEWARE = [
