@@ -1,5 +1,35 @@
 from rest_framework import serializers
-from .models import AdminUser, AdminOTP
+from accounts.models import CustomUser
+from admin_panel.models import AdminUser, AdminOTP
+
+
+class AdminRegisterSerializer(serializers.Serializer):
+
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    name = serializers.CharField()
+    role = serializers.ChoiceField(choices=AdminUser.ROLE_CHOICES)
+
+    def create(self, validated_data):
+
+        email = validated_data["email"]
+        password = validated_data["password"]
+        name = validated_data["name"]
+        role = validated_data["role"]
+
+        user = CustomUser.objects.create_user(
+            email=email,
+            password=password,
+            role="admin"
+        )
+
+        admin = AdminUser.objects.create(
+            user=user,
+            name=name,
+            role=role
+        )
+
+        return admin
 
 
 class AdminLoginSerializer(serializers.Serializer):
@@ -13,12 +43,13 @@ class AdminLoginSerializer(serializers.Serializer):
         password = data.get("password")
 
         try:
-            admin = AdminUser.objects.get(email=email)
-
+            admin = AdminUser.objects.get(user__email=email)
         except AdminUser.DoesNotExist:
             raise serializers.ValidationError("Invalid email")
 
-        if not admin.check_password(password):
+        user = admin.user
+
+        if not user.check_password(password):
             raise serializers.ValidationError("Invalid password")
 
         if admin.status != "active":
@@ -26,7 +57,8 @@ class AdminLoginSerializer(serializers.Serializer):
 
         data["admin"] = admin
         return data
-    
+
+
 class AdminOTPVerifySerializer(serializers.Serializer):
 
     email = serializers.EmailField()
@@ -38,7 +70,7 @@ class AdminOTPVerifySerializer(serializers.Serializer):
         otp = data.get("otp")
 
         try:
-            admin = AdminUser.objects.get(email=email)
+            admin = AdminUser.objects.get(user__email=email)
         except AdminUser.DoesNotExist:
             raise serializers.ValidationError("Admin not found")
 
@@ -51,4 +83,4 @@ class AdminOTPVerifySerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid or expired OTP")
 
         data["admin"] = admin
-        return data    
+        return data
