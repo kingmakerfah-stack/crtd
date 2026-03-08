@@ -32,6 +32,9 @@ urlpatterns = [
     
     # Include accounts authentication routes
     path('api/accounts/', include('accounts.urls')),
+
+    # Include admin panel routes
+    path('api/admin-panel/', include('admin_panel.urls')),
 ]
 
 if settings.DEBUG:

@@ -5,7 +5,10 @@ This module contains account-related asynchronous tasks such as
 OTP cleanup, email verification, and account maintenance.
 """
 
-from celery import shared_task
+try:
+    from celery import shared_task
+except ModuleNotFoundError:
+    from utils.celery_compat import shared_task
 from django.utils import timezone
 import logging
 
