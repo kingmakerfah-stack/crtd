@@ -31,7 +31,7 @@ SECRET_KEY = 'django-insecure-vo@zl!k(=a(ixsgs+g%z!a8$r)ag(r#oz4sa&1*^kg@x3ebs%a
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 
 # Application definition
@@ -48,10 +48,13 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
-    'Jobs.apps.JobsConfig',
     'admin_panel',
+<<<<<<< HEAD
     'subscription.apps.SubscriptionConfig',
 
+=======
+    'Jobs',
+>>>>>>> 701efb9815047981c2f439b54ddf4b7e3c2c6da2
 ]
 
 MIDDLEWARE = [
