@@ -49,12 +49,9 @@ INSTALLED_APPS = [
     'accounts',
     'Student',
     'admin_panel',
-<<<<<<< HEAD
     'subscription.apps.SubscriptionConfig',
-
-=======
     'Jobs',
->>>>>>> 701efb9815047981c2f439b54ddf4b7e3c2c6da2
+
 ]
 
 MIDDLEWARE = [
