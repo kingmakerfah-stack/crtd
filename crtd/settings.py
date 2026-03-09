@@ -219,8 +219,8 @@ GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
 
 # Message Broker - Redis
 # Redis performs both message broker (task queue) and result backend roles
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6380/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6380/0')
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 
 # Task Configuration
 CELERY_TASK_SERIALIZER = 'json'
@@ -250,7 +250,7 @@ CELERY_TASK_MAX_RETRIES = 3
 # Beat Schedule (Periodic Tasks)
 CELERY_BEAT_SCHEDULE = {
     'clean-expired-otps': {
-        'task': 'accounts.tasks.cleanup_expired_otps',
+        'task': 'utils.tasks.cleanup_expired_otps',
         'schedule': 3600,  # Every hour (in seconds)
         'options': {'queue': 'default'},
     },
