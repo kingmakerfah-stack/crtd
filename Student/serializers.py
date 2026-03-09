@@ -107,24 +107,3 @@ class StudentCareerPreferenceSerializer(serializers.ModelSerializer):
             )
 
         return StudentCareerPreference.objects.create(**validated_data)
-
-
-# ---------------------------------------------------------
-# Student OTP Serializer
-# ---------------------------------------------------------
-# Handles OTP verification for student registration.
-# ---------------------------------------------------------
-
-class StudentOTPSerializer(serializers.ModelSerializer):
-    """Serializer for StudentOTP model."""
-    
-    class Meta:
-        model = StudentOTP
-        fields = ['student', 'otp', 'created_at', 'expires_at', 'is_verified']
-        read_only_fields = ['created_at', 'expires_at']
-
-
-class StudentOTPVerifySerializer(serializers.Serializer):
-    """Serializer for verifying StudentOTP code."""
-    enrollment_id = serializers.CharField()
-    otp = serializers.CharField(max_length=10)

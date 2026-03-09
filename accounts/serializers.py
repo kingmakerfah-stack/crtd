@@ -51,7 +51,7 @@ class OTPRequestSerializer(serializers.Serializer):
     """Serializer for requesting an OTP email (verification or password reset)."""
     email = serializers.EmailField()
     purpose = serializers.ChoiceField(
-        choices=['email_verification', 'password_reset'],
+        choices=['email_verification', 'password_reset', 'login_otp'],
         default='email_verification',
     )
 
@@ -68,7 +68,7 @@ class OTPVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=10)
     purpose = serializers.ChoiceField(
-        choices=['email_verification', 'password_reset'],
+        choices=['email_verification', 'password_reset', 'login_otp'],
         default='email_verification',
     )
 
@@ -91,3 +91,13 @@ class PasswordResetSerializer(serializers.Serializer):
                 "No user found with this email address."
             )
         return value
+
+
+class AdminLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+
+class AdminLoginVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=10)

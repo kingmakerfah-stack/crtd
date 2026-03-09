@@ -4,8 +4,6 @@ from .views import (
     StudentPersonalDetails,
     StudentEducationView,
     StudentCareerPreferenceView,
-    StudentOTPRequestView,
-    StudentOTPVerificationView,
 )
 
 urlpatterns = [
@@ -21,7 +19,4 @@ urlpatterns = [
     # 🔹 Career Preference
     path("profile/career/", StudentCareerPreferenceView.as_view(), name="student-career"),
 
-    # 🔹 OTP Verification for Registration
-    path("otp/request/", StudentOTPRequestView.as_view(), name="student-otp-request"),
-    path("otp/verify/", StudentOTPVerificationView.as_view(), name="student-otp-verify"),
 ]
