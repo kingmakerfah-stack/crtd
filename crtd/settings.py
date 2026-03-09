@@ -50,9 +50,7 @@ INSTALLED_APPS = [
     'Student',
     'Jobs.apps.JobsConfig',
     'admin_panel',
-
-
-    'Jobs',
+    'subscription.apps.SubscriptionConfig',
 
 ]
 
