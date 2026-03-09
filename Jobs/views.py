@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.exceptions import NotFound
 from drf_yasg.utils import swagger_auto_schema
 from .models import Job
-from .serializers import JobSerializer
+from .serializers import JobSerializer,JobListSerializer
 from .pagination import JobPagination
 
 # Job List View
@@ -13,26 +13,31 @@ class JobListView(APIView):
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        responses={200: JobSerializer(many=True)},
+        responses={200: JobListSerializer(many=True)},
         operation_description="""
-        Retrieve a paginated list of available jobs.
+         Retrieve a paginated list of available jobs.
 
-        This endpoint returns all job postings ordered by latest created first.
-        Pagination is applied using the configured JobPagination class.
-
-        Frontend can use this endpoint to display job listings in the job portal.
+        This endpoint returns job listings with limited fields required
+        for the job listing page.
         """
     )
     def get(self, request):
-        jobs = Job.objects.all().order_by("-id")
+        jobs = Job.objects.only(
+            "job_role",
+            "total_vacancies",
+            "experience",
+            "location",
+            "package"
+        ).order_by("-id")
+
         paginator = JobPagination()
         paginated_jobs = paginator.paginate_queryset(jobs, request)
-
-        serializer = JobSerializer(paginated_jobs, many=True)
+        serializer = JobListSerializer(paginated_jobs, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+#Job create view
 class JobCreateView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [AllowAny]
     # Create Job
     @swagger_auto_schema(
         request_body=JobSerializer,
@@ -52,8 +57,9 @@ class JobCreateView(APIView):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+#update view
 class JobUpdateView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [AllowAny]
 
     def get_object(self, pk):
         try:
