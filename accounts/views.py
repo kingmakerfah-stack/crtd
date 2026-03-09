@@ -183,9 +183,8 @@ class RegisterAPIView(APIView):
             student=student,
             preferred_time=pre_app.preferred_time
         )
-        referral.delete()
-        pre_app.delete()
-
+        pre_app.verified = True
+		pre_app.save()
         return Response(
             {
                 "message": "User registered successfully.",
