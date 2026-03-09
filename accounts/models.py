@@ -73,12 +73,14 @@ class EmailOTP(models.Model):
 
     PURPOSE_EMAIL_VERIFICATION = 'email_verification'
     PURPOSE_PASSWORD_RESET = 'password_reset'
+    PURPOSE_LOGIN_OTP = 'login_otp'
     PURPOSE_CHOICES = (
         (PURPOSE_EMAIL_VERIFICATION, 'Email Verification'),
         (PURPOSE_PASSWORD_RESET, 'Password Reset'),
+        (PURPOSE_LOGIN_OTP, 'Login OTP'),
     )
 
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='email_otp')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='email_otps')
     otp = models.CharField(max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
@@ -91,6 +93,12 @@ class EmailOTP(models.Model):
 
     class Meta:
         db_table = 'accounts_email_otp'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'purpose'],
+                name='unique_otp_per_user_purpose'
+            ),
+        ]
 
     def is_expired(self):
         return timezone.now() > self.expires_at
@@ -100,10 +108,4 @@ class EmailOTP(models.Model):
     
     def is_valid(self):
         """Check if OTP is still valid (not expired and not yet used)."""
-        from django.utils import timezone
-        return not self.is_verified and timezone.now() < self.expires_at
-    
-    def is_expired(self):
-        """Check if OTP has expired."""
-        from django.utils import timezone
-        return timezone.now() > self.expires_at
+        return not self.is_verified and not self.is_expired()

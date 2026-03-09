@@ -299,11 +299,11 @@ class EmailService:
         # Create or update EmailOTP record (also handles resend safely)
         otp_instance, created = EmailOTP.objects.update_or_create(
             user=user,
+            purpose=purpose,
             defaults={
                 'otp': otp_code,
                 'expires_at': timezone.now() + timedelta(minutes=expiration_minutes),
                 'is_verified': False,
-                'purpose': purpose,
             }
         )
 
@@ -367,18 +367,11 @@ class EmailService:
         from accounts.models import EmailOTP
 
         try:
-            otp_instance = EmailOTP.objects.get(user=user)
+            otp_instance = EmailOTP.objects.get(user=user, purpose=purpose)
         except EmailOTP.DoesNotExist:
             return {
                 'success': False,
                 'message': 'No OTP found. Please request a new one.'
-            }
-
-        # Ensure this OTP belongs to the correct flow
-        if otp_instance.purpose != purpose:
-            return {
-                'success': False,
-                'message': 'No OTP found for this action. Please request a new one.'
             }
 
         # Check if expired
