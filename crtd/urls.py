@@ -32,6 +32,10 @@ urlpatterns = [
     
     # Include accounts authentication routes
     path('api/accounts/', include('accounts.urls')),
+
+    #Include payments routes
+    path("payments/", include("payments.urls")), 
+
 ]
 
 if settings.DEBUG:
