@@ -488,9 +488,9 @@ class AdminLoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        if user.role not in {'admin', 'subadmin'}:
+        if user.role != 'subadmin':
             return Response(
-                {"error": "Only admin/subadmin users are allowed."},
+                {"error": "Only a subadmin users are allowed."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -523,9 +523,9 @@ class AdminLoginVerifyOTPView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if user.role not in {'admin', 'subadmin'}:
+        if user.role !='subadmin':
             return Response(
-                {"error": "Only admin/subadmin users are allowed."},
+                {"error": "Only a subadmin users are allowed."},
                 status=status.HTTP_403_FORBIDDEN
             )
 

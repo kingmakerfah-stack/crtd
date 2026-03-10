@@ -16,7 +16,7 @@ import dj_database_url
 # Load environment variables from .env file
 # Explicitly specify the path to ensure it's found
 ENV_FILE = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(ENV_FILE)
+load_dotenv(ENV_FILE, encoding='utf-8-sig')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -181,10 +181,19 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_USER')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS')
+EMAIL_HOST_USER = (
+    os.environ.get('EMAIL_USER')
+    or os.environ.get('\ufeffEMAIL_USER')
+    or os.environ.get('EMAIL_HOST_USER')
+)
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS') or os.environ.get('EMAIL_HOST_PASSWORD')
 
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@crtdtechnologies.com')
+if EMAIL_HOST_PASSWORD:
+    # Gmail app-passwords are often copied with spaces between 4-char groups.
+    EMAIL_HOST_PASSWORD = EMAIL_HOST_PASSWORD.replace(' ', '')
+
+DEFAULT_FROM_EMAIL = 'muharibfah@gmail.com'
+
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 

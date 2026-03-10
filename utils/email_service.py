@@ -262,7 +262,7 @@ class EmailService:
         return task_result
     
     @staticmethod
-    def send_verification_otp(user, expiration_minutes=10, purpose='email_verification'):
+    def send_verification_otp(user, expiration_minutes=10, purpose='email_verification',otp_length=4):
         """
         Generates an OTP, stores it in the database, and queues email via Celery.
         
@@ -294,7 +294,7 @@ class EmailService:
         from accounts.models import EmailOTP
 
         # Generate OTP
-        otp_code = generate_otp()
+        otp_code = generate_otp(otp_length)
 
         # Create or update EmailOTP record (also handles resend safely)
         otp_instance, created = EmailOTP.objects.update_or_create(
@@ -326,7 +326,7 @@ class EmailService:
         return otp_code, otp_instance, task_result
 
     @staticmethod
-    def send_password_reset_otp(user, expiration_minutes=10):
+    def send_password_reset_otp(user, expiration_minutes=10, otp_length=4):
         """
         Convenience wrapper that generates and sends a password-reset OTP.
 
@@ -340,6 +340,7 @@ class EmailService:
             user,
             expiration_minutes=expiration_minutes,
             purpose='password_reset',
+            otp_length=otp_length
         )
     
     @staticmethod
