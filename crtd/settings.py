@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'Student',
     'Jobs.apps.JobsConfig',
     'admin_panel',
+    'admin_analytics',
 ]
 
 MIDDLEWARE = [
@@ -263,3 +264,22 @@ CELERY_QUEUES = {
 
 # Default queue for tasks
 CELERY_DEFAULT_QUEUE = 'default'
+
+# from datetime import timedelta
+
+# SIMPLE_JWT = {
+#     "ACCESS_TOKEN_LIFETIME": timedelta(hours=2),
+#     "AUTH_HEADER_TYPES": ("Bearer",),
+# }
+
+SWAGGER_SETTINGS = {
+    "USE_SESSION_AUTH": False,
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer <token>'",
+        }
+    },
+}
