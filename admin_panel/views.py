@@ -9,6 +9,12 @@ from .services import generate_admin_otp
 from .tasks import send_admin_otp_email
 from rest_framework.permissions import AllowAny
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework import serializers
+from admin_panel.models import AdminOTP, AdminUser
+from rest_framework_simplejwt.tokens import RefreshToken
+from .serializers import AdminLoginSerializer
+
+
 class AdminRegisterView(APIView):
 
     permission_classes = [AllowAny]
@@ -34,9 +40,32 @@ class AdminRegisterView(APIView):
         return Response(serializer.errors, status=400)
 
         return Response(serializer.errors, status=400)
-    
-from rest_framework import serializers
-from admin_panel.models import AdminOTP, AdminUser
+class AdminLoginView(APIView):
+
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(request_body=AdminLoginSerializer)
+    def post(self, request):
+
+        serializer = AdminLoginSerializer(data=request.data)
+
+        if serializer.is_valid():
+
+            admin = serializer.validated_data["admin"]
+            user = admin.user
+
+            refresh = RefreshToken.for_user(user)
+
+            return Response(
+                {
+                    "message": "Login successful",
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(serializer.errors, status=400)
 
 
 class AdminVerifyOTPView(APIView):

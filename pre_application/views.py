@@ -1,6 +1,8 @@
-from rest_framework.views import APIView
+﻿from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+
+from pre_application.pagination import TenUserPagination
 
 from .models import PreApplication
 from .serializers import PreApplicationSerializer , ReferalCodeSerializer
@@ -11,6 +13,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .models import ReferalCode
 from rest_framework.permissions import AllowAny,IsAuthenticated
+from rest_framework.views import APIView
+
+
+
 class PreApplicationCreateView(APIView):
     @swagger_auto_schema(
         request_body=PreApplicationSerializer,
@@ -157,3 +163,17 @@ class CheckReferralCodeAPIView(APIView):
             "whatsapp_no": pre_app.whatsapp_no,
             "alternate_phone": pre_app.alternate_phone,
         }, status=status.HTTP_200_OK)
+    
+class PreApplicationListView(APIView):
+
+    def get(self, request):
+
+        queryset = PreApplication.objects.all().order_by("-created_at")
+
+        paginator = TenUserPagination()
+
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        serializer = PreApplicationSerializer(paginated_queryset, many=True)
+
+        return paginator.get_paginated_response(serializer.data)

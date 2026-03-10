@@ -35,6 +35,9 @@ urlpatterns = [
 
     # Include admin panel routes
     path('api/admin-panel/', include('admin_panel.urls')),
+
+    # Include admin analytics routes
+    path('api/admin-analytics/', include('admin_analytics.urls')),
 ]
 
 if settings.DEBUG:
