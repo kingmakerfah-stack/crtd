@@ -3,7 +3,8 @@ from .views import (EnquiryAnalyticsView,
                     ReferenceCodeStatusView, 
                     EnquiryTableView, 
                     UpdateReferenceStatusView,
-                    DeleteReferenceCodeView)
+                    DeleteReferenceCodeView,
+                    PaymentAnalyticsView)
 
 
 urlpatterns = [
@@ -23,4 +24,5 @@ urlpatterns = [
         DeleteReferenceCodeView.as_view(),
         name="delete-reference-code"
     ),    
+    path('payments-analytics/',PaymentAnalyticsView.as_view())
 ]
