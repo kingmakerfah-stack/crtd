@@ -1,8 +1,7 @@
 from django.db import models
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-# from django.utils import timezone
-# from datetime import timedelta
+from django.utils import timezone
 
 
 class CustomUserManager(BaseUserManager):
@@ -38,6 +37,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         ('student', 'Student'),
         ('company', 'Company'),
         ('admin', 'Admin'),
+        ('subadmin', 'Subadmin'),
     )
 
     email = models.EmailField(unique=True)
@@ -64,29 +64,49 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
 class EmailOTP(models.Model):
     """
-    Model to store OTPs for email verification.
-    
-    Each OTP is associated with a user and has an expiration time.
-    Old OTPs should be cleaned up periodically.
+    Model to store OTPs for email verification and password reset.
+
+    Each OTP is associated with a user and a purpose (email_verification
+    or password_reset). Uses update_or_create so a resend always refreshes
+    the same record instead of creating duplicates.
+    Old OTPs are cleaned up periodically by the cleanup_expired_otps Celery task.
     """
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='email_otp')
+
+    PURPOSE_EMAIL_VERIFICATION = 'email_verification'
+    PURPOSE_PASSWORD_RESET = 'password_reset'
+    PURPOSE_LOGIN_OTP = 'login_otp'
+    PURPOSE_CHOICES = (
+        (PURPOSE_EMAIL_VERIFICATION, 'Email Verification'),
+        (PURPOSE_PASSWORD_RESET, 'Password Reset'),
+        (PURPOSE_LOGIN_OTP, 'Login OTP'),
+    )
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='email_otps')
     otp = models.CharField(max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_verified = models.BooleanField(default=False)
+    purpose = models.CharField(
+        max_length=30,
+        choices=PURPOSE_CHOICES,
+        default=PURPOSE_EMAIL_VERIFICATION,
+    )
 
     class Meta:
         db_table = 'accounts_email_otp'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'purpose'],
+                name='unique_otp_per_user_purpose'
+            ),
+        ]
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
 
     def __str__(self):
         return f"OTP for {self.user.email}"
     
     def is_valid(self):
         """Check if OTP is still valid (not expired and not yet used)."""
-        from django.utils import timezone
-        return not self.is_verified and timezone.now() < self.expires_at
-    
-    def is_expired(self):
-        """Check if OTP has expired."""
-        from django.utils import timezone
-        return timezone.now() > self.expires_at
+        return not self.is_verified and not self.is_expired()

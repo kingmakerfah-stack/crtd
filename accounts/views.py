@@ -10,6 +10,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .serializers import RoleBasedRegisterSerializer as RegisterSerializer
 from .serializers import GoogleAuthSerializer
+from .serializers import (
+    OTPRequestSerializer,
+    OTPVerificationSerializer,
+    PasswordResetSerializer,
+    AdminLoginSerializer,
+    AdminLoginVerifySerializer,
+)
 from drf_yasg.utils import swagger_auto_schema
 User = get_user_model()
 from pre_application.models import ReferalCode , PreApplication
@@ -19,87 +26,88 @@ from django.db import transaction
 
 
 class GoogleAuthView(APIView):
-	permission_classes = [AllowAny]
-	@swagger_auto_schema(
-    request_body=GoogleAuthSerializer,
-    responses={
-        200: "Login successful.",
-        400: "Invalid Google token or role mismatch.",
-        500: "Google OAuth client ID is not configured."
-    },
-    operation_description="Authenticate user using Google ID token."
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        request_body=GoogleAuthSerializer,
+        responses={
+            200: "Login successful.",
+            400: "Invalid Google token or role mismatch.",
+            500: "Google OAuth client ID is not configured."
+        },
+        operation_description="Authenticate user using Google ID token."
     )
-	def post(self, request):
-		serializer = GoogleAuthSerializer(data=request.data)
-		serializer.is_valid(raise_exception=True)
+    def post(self, request):
+        serializer = GoogleAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-		token_value = serializer.validated_data["id_token"]
-		role = serializer.validated_data.get("role")
+        token_value = serializer.validated_data["id_token"]
+        role = serializer.validated_data.get("role")
 
-		if not settings.GOOGLE_OAUTH_CLIENT_ID:
-			return Response(
-				{"detail": "Google OAuth client ID is not configured."},
-				status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-			)
+        if not settings.GOOGLE_OAUTH_CLIENT_ID:
+            return Response(
+                {"detail": "Google OAuth client ID is not configured."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-		try:
-			id_info = google_id_token.verify_oauth2_token(
-				token_value,
-				google_requests.Request(),
-				settings.GOOGLE_OAUTH_CLIENT_ID,
-			)
-		except ValueError:
-			return Response(
-				{"detail": "Invalid Google ID token."},
-				status=status.HTTP_400_BAD_REQUEST,
-			)
+        try:
+            id_info = google_id_token.verify_oauth2_token(
+                token_value,
+                google_requests.Request(),
+                settings.GOOGLE_OAUTH_CLIENT_ID,
+            )
+        except ValueError:
+            return Response(
+                {"detail": "Invalid Google ID token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-		email = id_info.get("email")
-		email_verified = id_info.get("email_verified", False)
+        email = id_info.get("email")
+        email_verified = id_info.get("email_verified", False)
 
-		if not email or not email_verified:
-			return Response(
-				{"detail": "Google account email is not verified."},
-				status=status.HTTP_400_BAD_REQUEST,
-			)
+        if not email or not email_verified:
+            return Response(
+                {"detail": "Google account email is not verified."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-		user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email=email).first()
 
-		if not user and not role:
-			return Response(
-				{"detail": "Role is required for first-time Google login."},
-				status=status.HTTP_400_BAD_REQUEST,
-			)
+        if not user and not role:
+            return Response(
+                {"detail": "Role is required for first-time Google login."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-		if user and role and user.role != role:
-			return Response(
-				{"detail": "Role does not match existing account."},
-				status=status.HTTP_400_BAD_REQUEST,
-			)
+        if user and role and user.role != role:
+            return Response(
+                {"detail": "Role does not match existing account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-		if not user:
-			user = User.objects.create_user(
-				email=email,
-				password=None,
-				role=role,
-			)
-			user.set_unusable_password()
-			user.save(update_fields=["password"])
+        if not user:
+            user = User.objects.create_user(
+                email=email,
+                password=None,
+                role=role,
+            )
+            user.set_unusable_password()
+            user.save(update_fields=["password"])
 
-		refresh = RefreshToken.for_user(user)
+        refresh = RefreshToken.for_user(user)
 
-		return Response(
-			{
-				"refresh": str(refresh),
-				"access": str(refresh.access_token),
-				"user": {
-					"id": user.id,
-					"email": user.email,
-					"role": user.role,
-				},
-			},
-			status=status.HTTP_200_OK,
-		)
+        return Response(
+            {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "role": user.role,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
 # -------------------------------------------------------
 # REGISTER VIEW
@@ -143,7 +151,7 @@ class RegisterAPIView(APIView):
         data = {
             "email": request.data.get("email"),
             "password": request.data.get("password"),
-			"confirm_password": request.data.get("password"),
+            "confirm_password": request.data.get("confirm_password"),
             "role": "student"
         }
 
@@ -183,8 +191,19 @@ class RegisterAPIView(APIView):
             student=student,
             preferred_time=pre_app.preferred_time
         )
+<<<<<<< HEAD
         pre_app.verified = True
         pre_app.save()
+=======
+
+        # Trigger universal OTP flow for student email verification.
+        from utils.email_service import EmailService
+        EmailService.send_verification_otp(user, purpose='email_verification')
+
+        pre_app.verified = True
+        pre_app.save()
+
+>>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
         return Response(
             {
                 "message": "User registered successfully.",
@@ -226,6 +245,11 @@ class LoginView(APIView):
         user = authenticate(request, email=email, password=password)
 
         if user is not None:
+            if not user.email_verified:
+                return Response(
+                    {"error": "Please verify your email first"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -278,19 +302,32 @@ class OTPRequestView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=OTPRequestSerializer,
+        responses={200: "OTP sent", 400: "Bad Request"},
+        operation_description="Send OTP for email_verification, password_reset, or login_otp."
+    )
+
     def post(self, request):
-        from .serializers import OTPRequestSerializer
         from utils.email_service import EmailService
-        
+
         serializer = OTPRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         email = serializer.validated_data['email']
-        user = User.objects.get(email=email)
-        
-        # Generate OTP, store it, and queue email to Celery
-        otp_code, otp_instance, email_task = EmailService.send_verification_otp(user)
-        
+        purpose = serializer.validated_data['purpose']
+        user = User.objects.filter(email=email).first()
+        if not user:
+            return Response(
+                {"error": "No user found with this email address."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        otp_code, otp_instance, email_task = EmailService.send_verification_otp(
+            user,
+            purpose=purpose,
+        )
+
         return Response(
             {
                 "message": "OTP has been sent to your email address.",
@@ -315,37 +352,205 @@ class OTPVerificationView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=OTPVerificationSerializer,
+        responses={200: "OTP verified", 400: "Invalid OTP"},
+        operation_description="Verify OTP for email_verification, password_reset, or login_otp."
+    )
+
     def post(self, request):
-        from .serializers import OTPVerificationSerializer
         from utils.email_service import EmailService
-        
+
         serializer = OTPVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         email = serializer.validated_data['email']
         otp_code = serializer.validated_data['otp']
-        
-        user = User.objects.get(email=email)
-        
-        # Verify OTP
-        result = EmailService.verify_otp(user, otp_code)
-        
+        purpose = serializer.validated_data['purpose']
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            return Response(
+                {"error": "No user found with this email address."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verify OTP against the correct purpose
+        result = EmailService.verify_otp(user, otp_code, purpose=purpose)
+
         if not result['success']:
             return Response(
                 {"error": result['message']},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Generate JWT tokens
+
+        # For email_verification keep existing behavior: return tokens.
+        if purpose == 'email_verification':
+            refresh = RefreshToken.for_user(user)
+            return Response(
+                {
+                    "message": "Email verified successfully.",
+                    "refresh": str(refresh),
+                    "access": str(refresh.access_token),
+                    "email": user.email,
+                    "role": user.role
+                },
+                status=status.HTTP_200_OK
+            )
+
+        if purpose == 'login_otp':
+            return Response(
+                {"message": "OTP verified successfully for login."},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            {"message": "OTP verified. You may now reset your password."},
+            status=status.HTTP_200_OK
+        )
+
+
+class PasswordResetView(APIView):
+    """
+    Final step of the forgot-password flow.
+
+    Accepts:
+    - email
+    - new_password
+
+    Checks that a verified password_reset OTP exists for this user,
+    sets the new password, then deletes the OTP record.
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        request_body=PasswordResetSerializer,
+        responses={200: "Password reset successful", 400: "OTP not verified"},
+        operation_description="Reset password after verified password_reset OTP."
+    )
+
+    def post(self, request):
+        from accounts.models import EmailOTP
+
+        serializer = PasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        new_password = serializer.validated_data['new_password']
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            return Response(
+                {"error": "No user found with this email address."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Gate: a verified password_reset OTP must exist
+        try:
+            otp_instance = EmailOTP.objects.get(
+                user=user,
+                purpose='password_reset',
+                is_verified=True,
+            )
+        except EmailOTP.DoesNotExist:
+            return Response(
+                {"error": "OTP not verified. Please complete OTP verification first."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Set new password
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+
+        # Delete the OTP record so it cannot be reused
+        otp_instance.delete()
+
+        return Response(
+            {"message": "Password reset successfully. You can now log in."},
+            status=status.HTTP_200_OK
+        )
+
+
+class AdminLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        request_body=AdminLoginSerializer,
+        responses={200: "OTP sent", 401: "Invalid credentials", 403: "Role not allowed"},
+        operation_description="Admin/Subadmin step-1 login: password check then send login_otp."
+    )
+    def post(self, request):
+        from utils.email_service import EmailService
+
+        serializer = AdminLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        user = authenticate(request, email=email, password=password)
+        if user is None:
+            return Response(
+                {"error": "Invalid email or password."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if user.role != 'subadmin':
+            return Response(
+                {"error": "Only a subadmin users are allowed."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        EmailService.send_verification_otp(user, purpose='login_otp')
+
+        return Response({"message": "OTP sent"}, status=status.HTTP_200_OK)
+
+
+class AdminLoginVerifyOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        request_body=AdminLoginVerifySerializer,
+        responses={200: "Login successful", 400: "Invalid OTP"},
+        operation_description="Admin/Subadmin step-2 login: verify login_otp and issue JWT tokens."
+    )
+    def post(self, request):
+        from utils.email_service import EmailService
+
+        serializer = AdminLoginVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            return Response(
+                {"error": "No user found with this email address."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if user.role !='subadmin':
+            return Response(
+                {"error": "Only a subadmin users are allowed."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        result = EmailService.verify_otp(user, otp, purpose='login_otp')
+        if not result['success']:
+            return Response(
+                {"error": result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         refresh = RefreshToken.for_user(user)
-        
         return Response(
             {
-                "message": "Email verified successfully.",
+                "message": "Login successful.",
                 "refresh": str(refresh),
                 "access": str(refresh.access_token),
                 "email": user.email,
-                "role": user.role
+                "role": user.role,
             },
             status=status.HTTP_200_OK
         )

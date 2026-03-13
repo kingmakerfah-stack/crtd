@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from django.shortcuts import render
 
 # Create your views here.
@@ -13,6 +14,14 @@ from rest_framework import serializers
 from admin_panel.models import AdminOTP, AdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import AdminLoginSerializer
+=======
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import AdminRegisterSerializer
+from rest_framework.permissions import AllowAny
+from drf_yasg.utils import swagger_auto_schema
+>>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
 
 
 class AdminRegisterView(APIView):
@@ -21,6 +30,7 @@ class AdminRegisterView(APIView):
 
     @swagger_auto_schema(request_body=AdminRegisterSerializer)
     def post(self, request):
+<<<<<<< HEAD
 
         serializer = AdminRegisterSerializer(data=request.data)
 
@@ -84,3 +94,15 @@ class AdminVerifyOTPView(APIView):
             )
 
         return Response(serializer.errors, status=400)
+=======
+        serializer = AdminRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                {"message": "Admin registered successfully."},
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+>>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be

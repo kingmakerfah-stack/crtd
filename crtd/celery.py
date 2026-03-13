@@ -18,10 +18,8 @@ Usage:
 """
 
 import os
-import sys
 import platform
 from celery import Celery
-from celery.schedules import crontab
 
 # Set default Django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crtd.settings')
@@ -43,12 +41,6 @@ app.autodiscover_tasks()
 worker_pool = 'threads' if platform.system() == 'Windows' else 'prefork'
 
 app.conf.update(
-    # Broker (Message Queue) - Redis
-    broker_url=os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
-    
-    # Result Backend - Redis
-    result_backend=os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0'),
-    
     # Worker pool for Windows compatibility
     worker_pool=worker_pool,
     
@@ -79,25 +71,6 @@ app.conf.update(
     task_autoretry_for=(Exception,),
     task_max_retries=3,
 )
-
-# -------------------------------------------------------
-# CELERY BEAT SCHEDULE (Periodic Tasks)
-# -------------------------------------------------------
-
-app.conf.beat_schedule = {
-    # Clean expired OTPs every hour
-    'clean-expired-otps': {
-        'task': 'accounts.tasks.cleanup_expired_otps',
-        'schedule': crontab(minute=0),  # Run every hour
-        'options': {'queue': 'default'},
-    },
-    # Send pending emails every 5 minutes
-    'send-pending-emails': {
-        'task': 'utils.tasks.process_pending_emails',
-        'schedule': crontab(minute='*/5'),  # Run every 5 minutes
-        'options': {'queue': 'default'},
-    },
-}
 
 
 @app.task(bind=True)

@@ -16,10 +16,16 @@ import dj_database_url
 # Load environment variables from .env file
 # Explicitly specify the path to ensure it's found
 ENV_FILE = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(ENV_FILE)
+load_dotenv(ENV_FILE, encoding='utf-8-sig')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+#razorpay configuration
+RAZORPAY_KEY_ID=os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET=os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_WEBHOOK_SECRET=os.getenv("RAZORPAY_WEBHOOK_SECRET")
 
 
 # Quick-start development settings - unsuitable for production
@@ -48,12 +54,32 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
+<<<<<<< HEAD
     'admin_panel',
     'admin_analytics',
 
     'subscription.apps.SubscriptionConfig',
     'Jobs',
 
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+    'payments',
+=======
+    'jobs',
+>>>>>>> f2ce8d5 (create jobs app.)
+=======
+    'Jobs',
+>>>>>>> dd40ac3 (feat: add Job model and serializer with validations)
+=======
+<<<<<<< Updated upstream
+    'jobs',
+=======
+    'admin_panel',
+>>>>>>> Stashed changes
+>>>>>>> 11de9c7 (Fix admin OTP flow and DB connection handling)
+>>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
 ]
 
 MIDDLEWARE = [
@@ -100,10 +126,14 @@ if not DATABASE_URL:
         }
     }
 else:
+    # In local/debug shells (IPython/Jupyter), stale persistent connections are common.
+    # Default to non-persistent connections in DEBUG, while allowing env override.
+    db_conn_max_age = int(os.getenv("DB_CONN_MAX_AGE", "0" if DEBUG else "60"))
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600,
+            conn_max_age=db_conn_max_age,
+            conn_health_checks=True,
         )
     }
 
@@ -160,10 +190,19 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_USER')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS')
+EMAIL_HOST_USER = (
+    os.environ.get('EMAIL_USER')
+    or os.environ.get('\ufeffEMAIL_USER')
+    or os.environ.get('EMAIL_HOST_USER')
+)
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS') or os.environ.get('EMAIL_HOST_PASSWORD')
+
+if EMAIL_HOST_PASSWORD:
+    # Gmail app-passwords are often copied with spaces between 4-char groups.
+    EMAIL_HOST_PASSWORD = EMAIL_HOST_PASSWORD.replace(' ', '')
 
 DEFAULT_FROM_EMAIL = 'muharibfah@gmail.com'
+
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
@@ -198,8 +237,8 @@ GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
 
 # Message Broker - Redis
 # Redis performs both message broker (task queue) and result backend roles
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6380/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6380/0')
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 
 # Task Configuration
 CELERY_TASK_SERIALIZER = 'json'
@@ -229,7 +268,7 @@ CELERY_TASK_MAX_RETRIES = 3
 # Beat Schedule (Periodic Tasks)
 CELERY_BEAT_SCHEDULE = {
     'clean-expired-otps': {
-        'task': 'accounts.tasks.cleanup_expired_otps',
+        'task': 'utils.tasks.cleanup_expired_otps',
         'schedule': 3600,  # Every hour (in seconds)
         'options': {'queue': 'default'},
     },
