@@ -191,10 +191,6 @@ class RegisterAPIView(APIView):
             student=student,
             preferred_time=pre_app.preferred_time
         )
-<<<<<<< HEAD
-        pre_app.verified = True
-        pre_app.save()
-=======
 
         # Trigger universal OTP flow for student email verification.
         from utils.email_service import EmailService
@@ -203,7 +199,6 @@ class RegisterAPIView(APIView):
         pre_app.verified = True
         pre_app.save()
 
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
         return Response(
             {
                 "message": "User registered successfully.",
