@@ -1,5 +1,4 @@
 from django.db import models
-<<<<<<< HEAD
 
 # Create your models here.
 from django.db import models
@@ -11,8 +10,6 @@ from accounts.models import CustomUser
 
 
 from django.db import models
-=======
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
 from accounts.models import CustomUser
 
 
@@ -54,7 +51,6 @@ class AdminUser(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.role}"
-<<<<<<< HEAD
 
 class AdminOTP(models.Model):
 
@@ -87,5 +83,3 @@ class AdminOTP(models.Model):
 
     def __str__(self):
         return f"{self.admin.user.email} - OTP {self.otp_code}"
-=======
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be

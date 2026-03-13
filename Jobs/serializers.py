@@ -19,13 +19,9 @@ class JobSerializer(serializers.ModelSerializer):
     def validate_job_role(self, value):
         if not value.strip():
             raise serializers.ValidationError("Job role cannot be empty")
-<<<<<<< HEAD
         return value
     
 class JobListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
         fields = ['job_role','total_vacancies','experience','location','package']
-=======
-        return value
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be

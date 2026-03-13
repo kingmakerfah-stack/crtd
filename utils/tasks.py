@@ -138,9 +138,6 @@ def process_pending_emails():
     }
 
 
-<<<<<<< HEAD
-
-=======
 __all__ = [
     'send_otp_email_task',
     'send_approval_email_task',
@@ -148,4 +145,3 @@ __all__ = [
     'cleanup_expired_otps',
     'process_pending_emails',
 ]
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be

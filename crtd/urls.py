@@ -34,7 +34,6 @@ urlpatterns = [
     # Include accounts authentication routes
     path('api/accounts/', include('accounts.urls')),
 
-<<<<<<< HEAD
 
     path('api/jobs/',include('Jobs.urls')),
 
@@ -44,10 +43,8 @@ urlpatterns = [
     # Include admin analytics routes
     path('api/admin-analytics/', include('admin_analytics.urls')),
 
-=======
     #Include payments routes
     path("payments/", include("payments.urls")), 
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
 
 ]
 

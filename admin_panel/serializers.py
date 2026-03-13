@@ -1,10 +1,6 @@
 from rest_framework import serializers
 from accounts.models import CustomUser
-<<<<<<< HEAD
 from admin_panel.models import AdminUser, AdminOTP
-=======
-from admin_panel.models import AdminUser
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
 
 
 class AdminRegisterSerializer(serializers.Serializer):
@@ -33,11 +29,10 @@ class AdminRegisterSerializer(serializers.Serializer):
             role=role
         )
 
-<<<<<<< HEAD
         return admin
 
 
-class AdminLoginSerializer(serializers.Serializer):
+class LoginSerializer(serializers.Serializer):
 
     email = serializers.EmailField()
     password = serializers.CharField()
@@ -89,6 +84,3 @@ class AdminOTPVerifySerializer(serializers.Serializer):
 
         data["admin"] = admin
         return data
-=======
-        return admin
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be

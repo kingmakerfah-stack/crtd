@@ -54,32 +54,11 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
-<<<<<<< HEAD
     'admin_panel',
     'admin_analytics',
-
     'subscription.apps.SubscriptionConfig',
     'Jobs',
-
-=======
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     'payments',
-=======
-    'jobs',
->>>>>>> f2ce8d5 (create jobs app.)
-=======
-    'Jobs',
->>>>>>> dd40ac3 (feat: add Job model and serializer with validations)
-=======
-<<<<<<< Updated upstream
-    'jobs',
-=======
-    'admin_panel',
->>>>>>> Stashed changes
->>>>>>> 11de9c7 (Fix admin OTP flow and DB connection handling)
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
 ]
 
 MIDDLEWARE = [
@@ -117,7 +96,6 @@ WSGI_APPLICATION = 'crtd.wsgi.application'
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-<<<<<<< HEAD
 if not DATABASE_URL:
     # Fallback to SQLite for development if DATABASE_URL is not set
     DATABASES = {
@@ -136,14 +114,7 @@ else:
             conn_max_age=db_conn_max_age,
             conn_health_checks=True,
         )
-=======
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
->>>>>>> e4da6cf202ebbe625ae373e2fce1f0d925d26dd2
     }
-}
 
 
 
