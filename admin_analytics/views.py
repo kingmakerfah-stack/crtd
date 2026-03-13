@@ -42,20 +42,58 @@ class EnquiryAnalyticsView(APIView):
         }
 
         return Response(data)
-    
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from .models import EnquiryAnalytics
+from .serializers import EnquiryTableSerializer, UpdateReferenceStatusSerializer
+from .permissions import IsAdminRole
+
+
+from pre_application.models import PreApplication
+
+class EnquiryTableView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+
+        enquiries = PreApplication.objects.all()
+
+        data = []
+
+        for i, obj in enumerate(enquiries, start=1):
+            data.append({
+                "s_no": i,
+                "enquiry_token": f"ENQ{100000 + obj.id}",
+                "date_time": obj.created_at.strftime("%b %d, %Y at %I:%M%p").lower(),
+                "full_name": f"{obj.first_name} {obj.last_name}",
+                "email": obj.email,
+                "whatsapp": obj.whatsapp_no,
+                "alternate_phone": obj.alternate_phone,
+                "birthplace": obj.birthplace_state
+            })
+
+        return Response(data)
+        
 class ReferenceCodeStatusView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def get(self, request):
 
-        # Dashboard Stats
         total_reference_code = ReferalCode.objects.count()
 
-        account_not_created = ReferalCode.objects.filter(is_used=False).count()
+        account_not_created = ReferalCode.objects.filter(
+            status="not_used"
+        ).count()
 
-        registration_not_completed = ReferalCode.objects.filter(is_used=True).count()
-        # Table Data
+        membership_not_completed = ReferalCode.objects.filter(
+            status="membership_pending"
+        ).count()
+
         queryset = ReferalCode.objects.select_related("student").all()
 
         data = []
@@ -64,11 +102,11 @@ class ReferenceCodeStatusView(APIView):
 
             data.append({
                 "id": obj.id,
-                "name": obj.student.name,
+                "name": f"{obj.student.first_name} {obj.student.last_name}",
                 "email": obj.student.email,
-                "whatsapp": obj.student.whatsapp,
+                "whatsapp": obj.student.whatsapp_no,
                 "reference_code": obj.code,
-                "status": "Used" if obj.is_used else "Not Used"
+                "status": obj.get_status_display()
             })
 
         serializer = ReferenceCodeStatusSerializer(data, many=True)
@@ -77,7 +115,45 @@ class ReferenceCodeStatusView(APIView):
             "stats": {
                 "total_reference_code": total_reference_code,
                 "account_not_created": account_not_created,
-                "registration_not_completed": registration_not_completed
+                "membership_not_completed": membership_not_completed
             },
             "results": serializer.data
-        })    
+        })
+
+class UpdateReferenceStatusView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    @swagger_auto_schema(request_body=UpdateReferenceStatusSerializer)
+    def patch(self, request, pk):
+
+        try:
+            ref = ReferalCode.objects.get(id=pk)
+        except ReferalCode.DoesNotExist:
+            return Response({"error": "Reference code not found"}, status=404)
+
+        serializer = UpdateReferenceStatusSerializer(data=request.data)
+
+        if serializer.is_valid():
+            ref.status = serializer.validated_data["status"]
+            ref.save()
+
+            return Response({
+                "message": "Status updated successfully"
+            })
+
+        return Response(serializer.errors, status=400)
+class DeleteReferenceCodeView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def delete(self, request, pk):
+
+        try:
+            ref = ReferalCode.objects.get(id=pk)
+        except ReferalCode.DoesNotExist:
+            return Response({"error": "Not found"}, status=404)
+
+        ref.delete()
+
+        return Response({"message": "Reference code deleted"})  
