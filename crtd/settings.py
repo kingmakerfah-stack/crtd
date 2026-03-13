@@ -117,6 +117,7 @@ WSGI_APPLICATION = 'crtd.wsgi.application'
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+<<<<<<< HEAD
 if not DATABASE_URL:
     # Fallback to SQLite for development if DATABASE_URL is not set
     DATABASES = {
@@ -135,7 +136,14 @@ else:
             conn_max_age=db_conn_max_age,
             conn_health_checks=True,
         )
+=======
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+>>>>>>> e4da6cf202ebbe625ae373e2fce1f0d925d26dd2
     }
+}
 
 
 
