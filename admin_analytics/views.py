@@ -2,15 +2,17 @@ from django.shortcuts import render
 
 # Create your views here.
 from django.utils.timezone import now
-from django.db.models import Count, Q
+from django.db.models import Count, Q,Sum
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from admin_analytics.serializers import ReferenceCodeStatusSerializer
 from pre_application.models import PreApplication, ReferalCode
 from .permissions import IsAdminRole
+from datetime import timedelta
+from payments.models import Payment
 
 
 class EnquiryAnalyticsView(APIView):
@@ -157,3 +159,91 @@ class DeleteReferenceCodeView(APIView):
         ref.delete()
 
         return Response({"message": "Reference code deleted"})  
+
+# Admin payment analytics view to calculate revenue
+class PaymentAnalyticsView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+
+        today = now().date()
+        week_start = today - timedelta(days=today.weekday())
+
+        analytics = Payment.objects.aggregate(
+
+            # Today
+            today_revenue=Sum(
+                "amount",
+                filter=Q(status="paid", created_at__date=today)
+            ),
+            today_transactions=Count(
+                "id",
+                filter=Q(status="paid", created_at__date=today)
+            ),
+
+            # Week
+            week_revenue=Sum(
+                "amount",
+                filter=Q(status="paid", created_at__date__gte=week_start)
+            ),
+            week_transactions=Count(
+                "id",
+                filter=Q(status="paid", created_at__date__gte=week_start)
+            ),
+
+            # Month
+            month_revenue=Sum(
+                "amount",
+                filter=Q(
+                    status="paid",
+                    created_at__month=today.month,
+                    created_at__year=today.year
+                )
+            ),
+            month_transactions=Count(
+                "id",
+                filter=Q(
+                    status="paid",
+                    created_at__month=today.month,
+                    created_at__year=today.year
+                )
+            ),
+
+            # Year
+            year_revenue=Sum(
+                "amount",
+                filter=Q(status="paid", created_at__year=today.year)
+            ),
+            year_transactions=Count(
+                "id",
+                filter=Q(status="paid", created_at__year=today.year)
+            ),
+
+            # Total
+            total_revenue=Sum(
+                "amount",
+                filter=Q(status="paid")
+            ),
+            total_transactions=Count(
+                "id",
+                filter=Q(status="paid")
+            ),
+        )
+        data = {
+            "today_revenue": (analytics["today_revenue"] or 0) / 100,
+            "today_transactions": analytics["today_transactions"] or 0,
+
+            "week_revenue": (analytics["week_revenue"] or 0) / 100,
+            "week_transactions": analytics["week_transactions"] or 0,
+
+            "month_revenue": (analytics["month_revenue"] or 0) / 100,
+            "month_transactions": analytics["month_transactions"] or 0,
+
+            "year_revenue": (analytics["year_revenue"] or 0) / 100,
+            "year_transactions": analytics["year_transactions"] or 0,
+
+            "total_revenue": (analytics["total_revenue"] or 0) / 100,
+            "total_transactions": analytics["total_transactions"] or 0,
+        }
+        return Response(data)
