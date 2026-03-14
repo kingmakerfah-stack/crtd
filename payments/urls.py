@@ -15,5 +15,6 @@ urlpatterns = [
 
     # Payment history endpoints
     path("payment-history/", PaymentHistoryListView.as_view(), name="payment-history"),
+
     
 ]
