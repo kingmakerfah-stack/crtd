@@ -13,38 +13,19 @@ import razorpay
 from .models import Payment
 from .services import create_razorpay_order, get_razorpay_client
 
+
+
+from rest_framework.generics import ListAPIView
+from .models import PaymentHistory
+from .serializers import PaymentHistorySerializer
+from .pagination import PaymentPagination
+from rest_framework.permissions import IsAdminUser
+
+
 User = get_user_model()
 
 
 # # Create Order API
-# @api_view(["POST"])
-# @permission_classes([AllowAny])
-# def create_order(request):
-
-#     amount = 50000  # ₹500
-    
-#     order = create_razorpay_order(request.user.id, amount)
-
-#     payment, created = Payment.objects.get_or_create(
-#         user=request.user,
-#         defaults={
-#             "razorpay_order_id": order["id"],
-#             "amount": amount
-#         }
-#     )
-
-#     if not created:
-#         payment.razorpay_order_id = order["id"]
-#         payment.amount = amount
-#         payment.save()
-
-#     return Response({
-#         "order_id": order["id"],
-#         "amount": amount,
-#         "key": settings.RAZORPAY_KEY_ID
-#     })
-
-
 @api_view(["POST"])
 # @permission_classes([IsAuthenticated])
 @permission_classes([AllowAny])
@@ -181,3 +162,17 @@ def razorpay_webhook(request):
 
 def payment_test_page(request):
     return render(request, "payments/payment_page.html")
+
+
+
+#payment history view  for admin to view all payment history with pagination
+
+class PaymentHistoryListView(ListAPIView):
+
+    queryset = PaymentHistory.objects.all().order_by("-registration_date")
+
+    serializer_class = PaymentHistorySerializer
+
+    pagination_class = PaymentPagination
+
+    permission_classes = [IsAdminUser]
