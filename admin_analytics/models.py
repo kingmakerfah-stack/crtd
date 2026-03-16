@@ -50,3 +50,34 @@ class EnquiryAnalytics(models.Model):
     def __str__(self):
 
         return f"{self.enquiry_token} - {self.student.first_name}"
+    
+
+class Testimonial(models.Model):
+
+    STATUS_CHOICES = (
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+    )
+
+    name = models.CharField(max_length=255)
+
+    qualification = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True
+    )
+
+    feedback = models.TextField()
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="active"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-
+from .models import EnquiryAnalytics, Testimonial
 
 class EnquiryAnalyticsSerializer(serializers.Serializer):
 
@@ -15,10 +15,6 @@ class ReferenceCodeStatusSerializer(serializers.Serializer):
     whatsapp = serializers.CharField()
     reference_code = serializers.CharField()
     status = serializers.CharField()    
-
-from rest_framework import serializers
-from .models import EnquiryAnalytics
-
 
 class EnquiryTableSerializer(serializers.ModelSerializer):
 
@@ -62,3 +58,9 @@ class UpdateReferenceStatusSerializer(serializers.Serializer):
             "membership_completed"
         ]
     )   
+
+class TestimonialSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Testimonial
+        fields = "__all__"
