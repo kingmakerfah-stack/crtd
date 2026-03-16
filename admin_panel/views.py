@@ -30,7 +30,7 @@ class AdminRegisterView(APIView):
 
             otp = generate_admin_otp(admin)
 
-            send_admin_otp_email.delay(admin.user.email, otp)
+            send_admin_otp_email(admin.user.email, otp)
 
             return Response(
                 {"message": "Admin registered. OTP sent to email."},

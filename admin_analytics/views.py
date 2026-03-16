@@ -8,12 +8,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from drf_yasg.utils import swagger_auto_schema
+from admin_analytics.models import Testimonial
+from admin_analytics.pagination import TestimonialPagination
 from admin_analytics.serializers import ReferenceCodeStatusSerializer
 from pre_application.models import PreApplication, ReferalCode
 from .permissions import IsAdminRole
 from datetime import timedelta
 from payments.models import Payment
-
+from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer
 
 class EnquiryAnalyticsView(APIView):
 
@@ -45,16 +47,6 @@ class EnquiryAnalyticsView(APIView):
 
         return Response(data)
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-
-from .models import EnquiryAnalytics
-from .serializers import EnquiryTableSerializer, UpdateReferenceStatusSerializer
-from .permissions import IsAdminRole
-
-
-from pre_application.models import PreApplication
 
 class EnquiryTableView(APIView):
 
@@ -247,3 +239,88 @@ class PaymentAnalyticsView(APIView):
             "total_transactions": analytics["total_transactions"] or 0,
         }
         return Response(data)
+
+class CreateTestimonialView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    @swagger_auto_schema(request_body=TestimonialSerializer)
+    def post(self, request):
+
+        serializer = TestimonialSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                {"message": "Testimonial created successfully"},
+                status=201
+            )
+
+        return Response(serializer.errors, status=400) 
+
+class TestimonialListView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+
+        queryset = Testimonial.objects.all().order_by("-created_at")
+
+        paginator = TestimonialPagination()
+        page = paginator.paginate_queryset(queryset, request)
+
+        serializer = TestimonialSerializer(page, many=True)
+
+        return paginator.get_paginated_response(serializer.data) 
+
+class UpdateTestimonialView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    @swagger_auto_schema(request_body=TestimonialSerializer)
+    def patch(self, request, pk):
+
+        try:
+            testimonial = Testimonial.objects.get(id=pk)
+        except Testimonial.DoesNotExist:
+            return Response(
+                {"error": "Testimonial not found"},
+                status=404
+            )
+
+        serializer = TestimonialSerializer(
+            testimonial,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response({
+                "message": "Testimonial updated successfully"
+            })
+
+        return Response(serializer.errors, status=400)
+
+class DeleteTestimonialView(APIView):
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def delete(self, request, pk):
+
+        try:
+            testimonial = Testimonial.objects.get(id=pk)
+        except Testimonial.DoesNotExist:
+            return Response(
+                {"error": "Testimonial not found"},
+                status=404
+            )
+
+        testimonial.delete()
+
+        return Response({
+            "message": "Testimonial deleted successfully"
+        })
+               
