@@ -54,23 +54,9 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     'payments',
-=======
     'jobs',
->>>>>>> f2ce8d5 (create jobs app.)
-=======
-    'Jobs',
->>>>>>> dd40ac3 (feat: add Job model and serializer with validations)
-=======
-<<<<<<< Updated upstream
-    'jobs',
-=======
     'admin_panel',
->>>>>>> Stashed changes
->>>>>>> 11de9c7 (Fix admin OTP flow and DB connection handling)
 ]
 
 MIDDLEWARE = [
