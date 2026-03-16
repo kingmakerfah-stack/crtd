@@ -44,7 +44,7 @@ urlpatterns = [
     path('api/admin-analytics/', include('admin_analytics.urls')),
 
     #Include payments routes
-    path("payments/", include("payments.urls")), 
+    path("api/payments/", include("payments.urls")), 
 
 ]
 

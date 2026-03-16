@@ -96,6 +96,17 @@ def verify_payment(request):
         payment.razorpay_payment_id = payment_id
         payment.activate_subscription()  # this also sets status="paid"
 
+
+        # create the payment history record for the successful payment andsave the details in the payment history model for the admin to view the payment history in the admin panel
+        PaymentHistory.objects.create(
+            user=payment.user,
+            amount=payment.amount / 100,   # convert paise to rupees
+            payment_method="upi",
+            payment_status="completed",
+            razorpay_payment_id=payment_id,
+            payment_details="Payment successful via Razorpay"
+        )
+
         return Response({
             "message": "Payment verified successfully",
             "subscription_active": payment.is_active()
@@ -176,3 +187,4 @@ class PaymentHistoryListView(ListAPIView):
     pagination_class = PaymentPagination
 
     permission_classes = [IsAdminUser]
+    # permission_classes = [AllowAny]
