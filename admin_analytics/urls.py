@@ -8,7 +8,9 @@ from .views import (EnquiryAnalyticsView,
                     CreateTestimonialView,
                     TestimonialListView,
                     UpdateTestimonialView,
-                    DeleteTestimonialView)
+                    DeleteTestimonialView,
+                    UpdateCompanyPartnersView,
+                    CollaborationAnalyticsAPIView)
 
 
 urlpatterns = [
@@ -40,4 +42,8 @@ urlpatterns = [
         "testimonials/<int:pk>/update/",UpdateTestimonialView.as_view()),
 
     path( "testimonials/<int:pk>/delete/", DeleteTestimonialView.as_view()),
+
+
+    path("company-partners/update/",UpdateCompanyPartnersView.as_view()),
+    path("collaborations/",CollaborationAnalyticsAPIView.as_view())
 ]
