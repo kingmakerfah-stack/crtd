@@ -81,3 +81,6 @@ class Testimonial(models.Model):
 
     def __str__(self):
         return self.name
+
+class CompanyPartners(models.Model):
+    total_partners = models.IntegerField(default=0)
