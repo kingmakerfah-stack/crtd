@@ -78,13 +78,23 @@ class CreateReferralAPIView(APIView):
             404: PreApplication not found
         """
         pre_app = get_object_or_404(PreApplication, pk=pk)
+        existing_referral = ReferalCode.objects.filter(student=pre_app).first()
 
-        # Prevent duplicate referral
-        if pre_app.verified:
+        # Prevent duplicate referral based on the actual referral record.
+        if existing_referral:
             return Response(
-                {"error": "Referral already exists for this student"},
+                {
+                    "error": "Referral already exists for this student",
+                    "referral_code": existing_referral.code,
+                    "status": existing_referral.status,
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Repair stale data where the student was marked verified without a referral row.
+        if pre_app.verified:
+            pre_app.verified = False
+            pre_app.save(update_fields=["verified"])
 
         serializer = ReferalCodeSerializer(data={
             "student": pre_app.id
