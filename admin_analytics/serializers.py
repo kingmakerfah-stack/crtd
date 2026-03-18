@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import EnquiryAnalytics, Testimonial
+from .models import EnquiryAnalytics, Testimonial,CompanyPartners
+
 
 class EnquiryAnalyticsSerializer(serializers.Serializer):
 
@@ -64,3 +65,14 @@ class TestimonialSerializer(serializers.ModelSerializer):
     class Meta:
         model = Testimonial
         fields = "__all__"
+
+class CompanyPartnersSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyPartners
+        fields = "__all__"
+    
+    def validate_total_partners(self,value):
+        if value < 0:
+            raise serializers.ValidationError("Total company partners cannot be negative.")
+        return value
+        
