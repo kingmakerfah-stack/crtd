@@ -3,19 +3,20 @@ from django.shortcuts import render
 # Create your views here.
 from django.utils.timezone import now
 from django.db.models import Count, Q,Sum
-
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from drf_yasg.utils import swagger_auto_schema
-from admin_analytics.models import Testimonial
+from admin_analytics.models import Testimonial,CompanyPartners
 from admin_analytics.pagination import TestimonialPagination
 from admin_analytics.serializers import ReferenceCodeStatusSerializer
 from pre_application.models import PreApplication, ReferalCode
 from .permissions import IsAdminRole
 from datetime import timedelta
 from payments.models import Payment
-from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer
+from Jobs.models import Job
+from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer,CompanyPartnersSerializer
 
 class EnquiryAnalyticsView(APIView):
 
@@ -323,4 +324,36 @@ class DeleteTestimonialView(APIView):
         return Response({
             "message": "Testimonial deleted successfully"
         })
-               
+class UpdateCompanyPartnersView(APIView):
+    permission_classes =[IsAuthenticated,IsAdminRole]
+    
+    @swagger_auto_schema(
+        request_body=CompanyPartnersSerializer,
+        operation_description = """ Update the total number of company partners.
+        No ID is required for this endpoint."""
+    )
+    def put(self,request):
+        partners,created = CompanyPartners.objects.get_or_create(id=1)
+        serializer=CompanyPartnersSerializer(partners,data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"message":"Company Partners Updated Successfully",
+                         "data":serializer.data},
+                        status=status.HTTP_200_OK)
+
+class CollaborationAnalyticsAPIView(APIView):
+    permission_classes = [IsAuthenticated,IsAdminRole]
+    @swagger_auto_schema(
+            operation_description="Returns total company partners, job openings, and testimonials count"
+    )
+    def get(self,request):
+        partners,_=CompanyPartners.objects.get_or_create(id=1)
+        total_job_openings = Job.objects.count()
+        testimonials = Testimonial.objects.count()
+        
+        data = {
+            "total_partners": partners.total_partners,
+            "total_job_openings" : total_job_openings,
+            "testimonials":testimonials
+        }
+        return Response(data,status=status.HTTP_200_OK)
