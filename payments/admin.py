@@ -1,7 +1,13 @@
 from django.contrib import admin
 from .models import Payment,PaymentHistory
 # Register your models here.
-admin.site.register(Payment)
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display=(
+        'user',
+        'plan',
+        'status',
+    )
 
 
 

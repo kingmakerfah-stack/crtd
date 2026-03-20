@@ -4,6 +4,8 @@ from django.utils import timezone
 from datetime import timedelta
 import uuid
 
+from subscription.models import SubscriptionPlan
+
 
 def generate_transaction_id():
         return f"TRX-{uuid.uuid4().hex[:6].upper()}"
@@ -17,6 +19,8 @@ class Payment(models.Model):
     ]
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    plan=models.ForeignKey(SubscriptionPlan,on_delete=models.SET_NULL,null=True,blank=True)
 
     razorpay_order_id = models.CharField(max_length=255)
     razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True)
@@ -36,7 +40,7 @@ class Payment(models.Model):
 
     def activate_subscription(self):
         self.subscription_start = timezone.now()
-        self.subscription_end = timezone.now() + timedelta(days=180)
+        self.subscription_end = timezone.now() + timedelta(days=180)  #6-month subscription
         self.status = "paid"
         self.save()
 
