@@ -9,6 +9,9 @@ on:
       - dev
 
 jobs:
+  # ────────────────────────────────────────────────────────────
+  # JOB 1 — Run Tests
+  # ────────────────────────────────────────────────────────────
   test:
     name: 🧪 Run Tests
     runs-on: ubuntu-latest
@@ -64,13 +67,16 @@ jobs:
 
       - name: ✅ Run tests
         run: python manage.py test --verbosity=2
+
+  # ────────────────────────────────────────────────────────────
+  # JOB 2 — Security Scans (code + dependencies + filesystem)
+  # ────────────────────────────────────────────────────────────
   security:
     name: 🔒 Security Scans
     runs-on: ubuntu-latest
-    needs: test           # only run if tests pass
+    needs: test
 
     permissions:
-      security-events: write    # required to upload SARIF to GitHub Security tab
       actions: read
       contents: read
 
@@ -89,6 +95,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install bandit safety
 
+      # ── Bandit: static code analysis ──────────────────────
       - name: 🕵️ Bandit — static code security analysis
         run: |
           bandit -r . \
@@ -108,7 +115,10 @@ jobs:
           name: bandit-report
           path: bandit-report.json
 
+      # ── Safety: dependency vulnerability check ─────────────
       - name: 🛡️ Safety — dependency vulnerability check
+        env:
+          SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
         run: |
           safety scan --output json > safety-report.json || true
           safety scan
@@ -120,53 +130,73 @@ jobs:
           name: safety-report
           path: safety-report.json
 
+      # ── Trivy: filesystem scan (secrets + vulns) ───────────
       - name: 🔍 Trivy — filesystem scan (secrets + vulns)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: .
           format: table
-          exit-code: "1"               # fail pipeline if HIGH or CRITICAL found
+          output: trivy-fs-report.txt
+          exit-code: "1"               # fail pipeline on HIGH or CRITICAL
           severity: HIGH,CRITICAL
           scanners: vuln,secret
 
-      - name: 📋 Trivy — upload SARIF report to GitHub Security tab
-        uses: aquasecurity/trivy-action@master
+      - name: 📋 Upload Trivy filesystem report
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-results.sarif
-          scanners: vuln,secret
+          name: trivy-fs-report
+          path: trivy-fs-report.txt
 
-      - name: 📤 Upload Trivy SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-results.sarif
-  deploy:
-    name: 🚀 Build & Deploy on Server
+  # ────────────────────────────────────────────────────────────
+  # JOB 3 — Build Docker image & scan it with Trivy
+  # ────────────────────────────────────────────────────────────
+  docker-scan:
+    name: 🐳 Docker Build & Image Scan
     runs-on: ubuntu-latest
-    needs: security          
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: security
+
+    permissions:
+      actions: read
+      contents: read
 
     steps:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v4
 
-      - name: 📦 Copy code to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          source: "."
-          target: "/home/ubuntu/crtd-backend"
-          rm: true                     
+      - name: 🔨 Build Docker image
+        run: docker build -t crtd-backend-image:ci .
 
-      - name: 🐳 Build image & run container
+      - name: 🔍 Trivy — scan Docker image (secrets + vulns)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          image-ref: crtd-backend-image:ci
+          format: table
+          output: trivy-image-report.txt
+          exit-code: "1"               # fail pipeline on HIGH or CRITICAL
+          severity: HIGH,CRITICAL
+          scanners: vuln,secret
+
+      - name: 📋 Upload Trivy image report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-report
+          path: trivy-image-report.txt
+
+  # ────────────────────────────────────────────────────────────
+  # JOB 4 — Deploy to server (push to dev only)
+  # ────────────────────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy Backend to Server
+    runs-on: ubuntu-latest
+    needs: docker-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+
+    steps:
+      - name: 🐳 SSH & Deploy via Docker
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -174,45 +204,63 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            set -e  
-            APP_DIR="/home/ubuntu/crtd-backend"
-            CONTAINER_NAME="crtd-backend"
-            IMAGE_NAME="crtd-backend-image"
+            echo "──────────────────────────────────────"
+            echo "👤 Switching to test-deploy user"
+            echo "──────────────────────────────────────"
+            sudo su - test-deploy << 'EOF'
+            set -e
 
             echo "──────────────────────────────────────"
             echo "📁 Moving into project directory"
             echo "──────────────────────────────────────"
-            cd $APP_DIR
+            cd app/crtd-backend/crtd-backend-v2
+
+            echo "──────────────────────────────────────"
+            echo "⬇️  Pulling latest code from dev"
+            echo "──────────────────────────────────────"
+            git pull origin dev
 
             echo "──────────────────────────────────────"
             echo "🛑 Stopping running container (if any)"
             echo "──────────────────────────────────────"
-            docker stop $CONTAINER_NAME || true
-            docker rm   $CONTAINER_NAME || true
+            docker stop backend || true
+            docker rm   backend || true
 
             echo "──────────────────────────────────────"
             echo "🗑️  Removing old Docker image (if any)"
             echo "──────────────────────────────────────"
-            docker rmi $IMAGE_NAME || true
+            docker rmi backend || true
 
             echo "──────────────────────────────────────"
             echo "🔨 Building new Docker image"
             echo "──────────────────────────────────────"
-            docker build -t $IMAGE_NAME .
-            docker images | grep $IMAGE_NAME
+            docker build -t backend .
+
+            echo "──────────────────────────────────────"
+            echo "🔎 Verifying image was created"
+            echo "──────────────────────────────────────"
+            docker images | grep backend
 
             echo "──────────────────────────────────────"
             echo "▶️  Running new container"
             echo "──────────────────────────────────────"
             docker run -d \
-              --name $CONTAINER_NAME \
+              --name backend \
               --restart unless-stopped \
               -p 8000:8000 \
-              --env-file $APP_DIR/.env \
-              $IMAGE_NAME
+              backend
 
             echo "──────────────────────────────────────"
-            echo "✅ Deployment complete!"
-            echo "Container status:"
-            docker ps | grep $CONTAINER_NAME
+            echo "🧹 Cleaning up unused Docker resources"
             echo "──────────────────────────────────────"
+            docker image prune -f
+
+            echo "──────────────────────────────────────"
+            echo "✅ Backend deployed successfully!"
+            echo "Container status:"
+            docker ps | grep backend
+            echo "──────────────────────────────────────"
+            echo "🏥 Checking app health"
+            echo "──────────────────────────────────────"
+            curl -sI http://localhost:8000
+            EOF
