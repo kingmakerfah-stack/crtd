@@ -20,6 +20,7 @@ from .models import PaymentHistory
 from .serializers import PaymentHistorySerializer
 from .pagination import PaymentPagination
 from rest_framework.permissions import IsAdminUser
+from subscription.models import SubscriptionPlan
 
 
 User = get_user_model()
@@ -31,16 +32,33 @@ User = get_user_model()
 @permission_classes([AllowAny])
 def create_order(request):
 
-    amount = 50000  # ₹500 in paise
+    # amount = 50000  # ₹500 in paise
 
-    # TEMP user for testing
-    user = User.objects.first()
+    # get the current user if not then temp user for testing
+    
+    
+    # user = request.user
+    user =User.objects.first() #for testing the payment flow without authentication and then we will change it to the authenticated user in the future
 
     if not user:
         return Response({"error": "No user found in database"}, status=400)
+    
+    #GET SUBSCRIPTION PLAN
+    plan = SubscriptionPlan.objects.filter(is_active=True).first()
 
+    if not plan:
+        return Response({"error": "Subscription plan not found. Contact admin."}, status=404)
+    
+    #  CALCULATE FINAL PRICE (AFTER DISCOUNT)
+    final_price = plan.final_price
+
+    #  CONVERT TO PAISE (RAZORPAY FORMAT)
+    amount = int(final_price * 100)
+
+    # create the razorpay order
     order = create_razorpay_order(user.id, amount)
 
+    #save payment with plan
     payment, created = Payment.objects.get_or_create(
         user=user,
         defaults={
@@ -50,6 +68,7 @@ def create_order(request):
     )
 
     if not created:
+        payment.plan = plan
         payment.razorpay_order_id = order["id"]
         payment.amount = amount
         payment.save()
@@ -95,6 +114,7 @@ def verify_payment(request):
 
         payment.razorpay_payment_id = payment_id
         payment.activate_subscription()  # this also sets status="paid"
+        payment.save()
 
 
         # create the payment history record for the successful payment andsave the details in the payment history model for the admin to view the payment history in the admin panel
@@ -104,7 +124,7 @@ def verify_payment(request):
             payment_method="upi",
             payment_status="completed",
             razorpay_payment_id=payment_id,
-            payment_details="Payment successful via Razorpay"
+            payment_details=f"Subscription Plan: {payment.plan.name}"
         )
 
         return Response({
@@ -186,5 +206,5 @@ class PaymentHistoryListView(ListAPIView):
 
     pagination_class = PaymentPagination
 
-    permission_classes = [IsAdminUser]
-    # permission_classes = [AllowAny]
+    # permission_classes = [IsAdminUser]
+    permission_classes = [AllowAny]
