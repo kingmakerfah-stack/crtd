@@ -137,7 +137,7 @@ jobs:
           scan-ref: .
           format: table
           output: trivy-fs-report.txt
-          exit-code: "0"               # fail pipeline on HIGH or CRITICAL
+          exit-code: "1"               # fail pipeline on HIGH or CRITICAL
           severity: HIGH,CRITICAL
           scanners: vuln,secret
 
