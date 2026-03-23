@@ -9,7 +9,7 @@ class PreApplicationAdmin(admin.ModelAdmin):
     list_display = ('first_name', 'last_name', 'email', 'whatsapp_no', 'verified', 'create_referral_button')
     def create_referral_button(self, obj):
         if  obj.verified:
-            return format_html('<span style="color: green;">Verified</span>')
+            return format_html('<span style="color: green;">{}</span>', 'Verified')
         return format_html(
             '<a class="button" target="_blank" href="/api/pre-application/referral/create/{}/">Generate Referral</a>',
             obj.pk
