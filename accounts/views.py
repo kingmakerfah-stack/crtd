@@ -23,6 +23,8 @@ from pre_application.models import ReferalCode , PreApplication
 from rest_framework.generics import get_object_or_404
 from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
 from django.db import transaction
+from django.core import signing
+from django.core.signing import BadSignature, SignatureExpired
 
 
 class GoogleAuthView(APIView):
@@ -35,6 +37,7 @@ class GoogleAuthView(APIView):
             400: "Invalid Google token or role mismatch.",
             500: "Google OAuth client ID is not configured."
         },
+        tags=["Accounts"],
         operation_description="Authenticate user using Google ID token."
     )
     def post(self, request):
@@ -117,20 +120,41 @@ class RegisterAPIView(APIView):
 
     @swagger_auto_schema(
         request_body=RegisterSerializer,
-        responses={201: "Created", 400: "Bad Request"}
+        responses={201: "Created", 400: "Bad Request"},
+        tags=["Accounts"],
     )
     @transaction.atomic
     def post(self, request):
-
+        referral_access_token = request.data.get("referral_access_token")
         referral_code = request.data.get("referral_code")
-        if not referral_code:
-            return Response(
-                {"error": "Referral code is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
-        # 1️⃣ Get referral object
-        referral = get_object_or_404(ReferalCode, code=referral_code)
+        referral = None
+        if referral_access_token:
+            try:
+                payload = signing.loads(
+                    referral_access_token,
+                    salt="referral-access",
+                    max_age=60 * 60 * 24,
+                )
+                referral = get_object_or_404(ReferalCode, id=payload.get("referral_id"))
+            except SignatureExpired:
+                return Response(
+                    {"error": "Referral access token has expired."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except BadSignature:
+                return Response(
+                    {"error": "Invalid referral access token."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif referral_code:
+            # Backward compatibility for existing clients.
+            referral = get_object_or_404(ReferalCode, code=referral_code)
+        else:
+            return Response(
+                {"error": "Referral access token or referral code is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # 2️⃣ Validate referral
         if referral.is_used:
@@ -157,6 +181,14 @@ class RegisterAPIView(APIView):
 
         serializer = RegisterSerializer(data=data)
         serializer.is_valid(raise_exception=True)
+
+        # Prevent registration with a different email than approved in pre-application.
+        if serializer.validated_data["email"].lower() != pre_app.email.lower():
+            return Response(
+                {"error": "Email must match the approved pre-application email."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         user = serializer.save()
 
         # 4️⃣ Create Student
@@ -198,6 +230,8 @@ class RegisterAPIView(APIView):
 
         pre_app.verified = True
         pre_app.save()
+        referral.is_used = True
+        referral.save(update_fields=["is_used"])
 
         return Response(
             {
@@ -230,6 +264,7 @@ class LoginView(APIView):
         200: "Login successful.",
         401: "Invalid email or password."
     },
+    tags=["Accounts"],
     operation_description="Login user using email and password."
     )
     def post(self, request):
@@ -300,6 +335,7 @@ class OTPRequestView(APIView):
     @swagger_auto_schema(
         request_body=OTPRequestSerializer,
         responses={200: "OTP sent", 400: "Bad Request"},
+        tags=["Accounts"],
         operation_description="Send OTP for email_verification, password_reset, or login_otp."
     )
 
@@ -350,6 +386,7 @@ class OTPVerificationView(APIView):
     @swagger_auto_schema(
         request_body=OTPVerificationSerializer,
         responses={200: "OTP verified", 400: "Invalid OTP"},
+        tags=["Accounts"],
         operation_description="Verify OTP for email_verification, password_reset, or login_otp."
     )
 
@@ -421,6 +458,7 @@ class PasswordResetView(APIView):
     @swagger_auto_schema(
         request_body=PasswordResetSerializer,
         responses={200: "Password reset successful", 400: "OTP not verified"},
+        tags=["Accounts"],
         operation_description="Reset password after verified password_reset OTP."
     )
 
@@ -472,6 +510,7 @@ class AdminLoginView(APIView):
     @swagger_auto_schema(
         request_body=AdminLoginSerializer,
         responses={200: "OTP sent", 401: "Invalid credentials", 403: "Role not allowed"},
+        tags=["Accounts"],
         operation_description="Admin/Subadmin step-1 login: password check then send login_otp."
     )
     def post(self, request):
@@ -507,6 +546,7 @@ class AdminLoginVerifyOTPView(APIView):
     @swagger_auto_schema(
         request_body=AdminLoginVerifySerializer,
         responses={200: "Login successful", 400: "Invalid OTP"},
+        tags=["Accounts"],
         operation_description="Admin/Subadmin step-2 login: verify login_otp and issue JWT tokens."
     )
     def post(self, request):
