@@ -19,6 +19,7 @@ class JobListCreateView(APIView):
             responses={
             200: JobSerializer(many=True),
         },
+        tags=["Jobs"],
         operation_description="""
         Retrieve a paginated list of available jobs.
         This endpoint returns all job postings ordered by latest created first.
@@ -45,6 +46,7 @@ class JobListCreateView(APIView):
                 201: JobSerializer,
                 400: "Validation Error"
             },
+            tags=["Jobs"],
             operation_description="""
             Create a new job posting.
 
@@ -88,6 +90,7 @@ class JobDetailView(APIView):
             400: "Validation Error",
             404: "Job not found"
         },
+    tags=["Jobs"],
     operation_description="""
         Fully update an existing job.
 
@@ -114,6 +117,7 @@ class JobDetailView(APIView):
             400: "Validation Error",
             404: "Job not found"
         },
+        tags=["Jobs"],
         operation_description="""
         Partially update a job.
 
@@ -136,6 +140,7 @@ class JobDetailView(APIView):
         204: "Job deleted successfully",
         404: "Job not found"
     },
+    tags=["Jobs"],
     operation_description="""
         Delete a job posting.
 
