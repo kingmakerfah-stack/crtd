@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import render
+from drf_yasg.utils import swagger_auto_schema
 import razorpay 
 from .models import Payment
 from .services import create_razorpay_order, get_razorpay_client
@@ -45,6 +46,11 @@ User = get_user_model()
 #     })
 
 
+@swagger_auto_schema(
+    method="post",
+    tags=["Payments"],
+    operation_description="Create a Razorpay order for subscription payment.",
+)
 @api_view(["POST"])
 # @permission_classes([IsAuthenticated])
 @permission_classes([AllowAny])
@@ -81,6 +87,11 @@ def create_order(request):
 
 
 # Verify Payment
+@swagger_auto_schema(
+    method="post",
+    tags=["Payments"],
+    operation_description="Verify Razorpay payment signature and activate subscription.",
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def verify_payment(request):
@@ -133,6 +144,11 @@ def verify_payment(request):
 
 
 # Razorpay Webhook
+@swagger_auto_schema(
+    method="post",
+    tags=["Payments"],
+    operation_description="Handle Razorpay webhook events and update payment status.",
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def razorpay_webhook(request):
