@@ -22,6 +22,7 @@ class StudentDataView(APIView):
         401: "Authentication credentials were not provided.",
         403: "User is not authorized as a student."
     },
+    tags=["Student"],
     operation_description="Returns complete student profile including personal details, education, and career preference."
     )
     def get(self, request):
@@ -64,6 +65,7 @@ class StudentPersonalDetails(APIView):
             400: "Validation Error",
             404: "Personal details not found."
         },
+        tags=["Student"],
         operation_description="""
         Fully update the authenticated student's personal details.
         This endpoint replaces the entire personal profile with the data provided in the request body.
@@ -94,6 +96,7 @@ class StudentPersonalDetails(APIView):
             400: "Validation Error",
             404: "Personal details not found."
         },
+        tags=["Student"],
         operation_description="""
         Partially update the authenticated student's personal details.
         This endpoint updates only the fields provided in the request body for the student's personal details.
@@ -134,6 +137,7 @@ class StudentEducationView(APIView):
         400: "Validation Error",
         404: "Education details not found."
     },
+    tags=["Student"],
     operation_description="""
     Fully update the authenticated student's education details.
     This endpoint replaces the entire education record with the data provided in the request body.
@@ -161,6 +165,7 @@ class StudentEducationView(APIView):
         400: "Validation Error",
         404: "Education details not found."
     },
+    tags=["Student"],
     operation_description="""
     Partially update the authenticated student's education details.
     This endpoint updates only the fields provided in the request body for the student's education record.
@@ -199,6 +204,7 @@ class StudentCareerPreferenceView(APIView):
         400: "Validation Error",
         404: "Career preference not found."
     },
+    tags=["Student"],
     operation_description="""
     Fully update the authenticated student's career preference details.
     This endpoint replaces the entire career preference record with the data provided in the request body.
@@ -226,6 +232,7 @@ class StudentCareerPreferenceView(APIView):
         400: "Validation Error",
         404: "Career preference not found."
     },
+    tags=["Student"],
     operation_description="""
     Partially update the authenticated student's career preference details.
     This endpoint updates only the fields provided in the request body for the student's education record.
