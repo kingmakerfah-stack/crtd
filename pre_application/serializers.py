@@ -6,7 +6,7 @@ class PreApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PreApplication
         fields = "__all__"
-        read_only_fields = ["created_at"]
+        read_only_fields = ["verified", "created_at"]
 
     def validate_first_name(self, value):
         value = value.strip()
