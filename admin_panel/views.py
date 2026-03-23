@@ -10,7 +10,10 @@ class AdminRegisterView(APIView):
 
     permission_classes = [AllowAny]
 
-    @swagger_auto_schema(request_body=AdminRegisterSerializer)
+    @swagger_auto_schema(
+        request_body=AdminRegisterSerializer,
+        tags=["Admin Panel"],
+    )
     def post(self, request):
         serializer = AdminRegisterSerializer(data=request.data)
         if serializer.is_valid():
