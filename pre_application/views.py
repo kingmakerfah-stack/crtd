@@ -7,18 +7,21 @@ from .serializers import PreApplicationSerializer , ReferalCodeSerializer
 from drf_yasg.utils import swagger_auto_schema
 from utils.email_service import EmailService
 from rest_framework.generics import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from .models import ReferalCode
-from rest_framework.permissions import AllowAny,IsAuthenticated
+from rest_framework.permissions import AllowAny
+from admin_panel.permissions import IsSuperuserOrAdminOrSubadmin
+
+
 class PreApplicationCreateView(APIView):
     permission_classes = [AllowAny]
+
     @swagger_auto_schema(
         request_body=PreApplicationSerializer,
         responses={
             201: PreApplicationSerializer,
             400: "Validation Error"
         },
+        tags=["Pre Application"],
         operation_description="Create a new pre-application"
     )
     def post(self, request):
@@ -39,6 +42,7 @@ class ReferalCodeCreateView(APIView):
             201: ReferalCodeSerializer,
             400: "Validation Error"
         },
+        tags=["Pre Application"],
         operation_description="Create a new referral code"
     )
     def post(self, request):
@@ -51,9 +55,8 @@ class ReferalCodeCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class CreateReferralAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsSuperuserOrAdminOrSubadmin]
     """
     Create a referral code for a pre-application and send approval email.
     
@@ -61,7 +64,13 @@ class CreateReferralAPIView(APIView):
     automatically sent to the student using the EmailService.
     """
 
-    def get(self, request, pk):
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        operation_description="Protected endpoint to generate a referral code for a pre-application.",
+    )
+
+    def post(self, request, pk):
         """
         Generate a referral code for a student and send approval email.
         
@@ -114,6 +123,7 @@ class CreateReferralAPIView(APIView):
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
+from django.core import signing
 
 
 class CheckReferralCodeAPIView(APIView):
@@ -151,6 +161,10 @@ class CheckReferralCodeAPIView(APIView):
     def get(self, request, code):
         referral = get_object_or_404(ReferalCode, code=code)
         pre_app = referral.student
+        referral_access_token = signing.dumps(
+            {"referral_id": referral.id},
+            salt="referral-access"
+        )
 
         return Response({
             "first_name": pre_app.first_name,
@@ -158,4 +172,5 @@ class CheckReferralCodeAPIView(APIView):
             "email": pre_app.email,
             "whatsapp_no": pre_app.whatsapp_no,
             "alternate_phone": pre_app.alternate_phone,
+            "referral_access_token": referral_access_token,
         }, status=status.HTTP_200_OK)
