@@ -37,7 +37,7 @@ SECRET_KEY = 'django-insecure-vo@zl!k(=a(ixsgs+g%z!a8$r)ag(r#oz4sa&1*^kg@x3ebs%a
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 
 # Application definition
@@ -54,9 +54,9 @@ INSTALLED_APPS = [
     'pre_application',
     'accounts',
     'Student',
-    'payments',
-    'jobs',
     'admin_panel',
+    'Jobs.apps.JobsConfig',
+    'payments',
 ]
 
 MIDDLEWARE = [
@@ -103,14 +103,10 @@ if not DATABASE_URL:
         }
     }
 else:
-    # In local/debug shells (IPython/Jupyter), stale persistent connections are common.
-    # Default to non-persistent connections in DEBUG, while allowing env override.
-    db_conn_max_age = int(os.getenv("DB_CONN_MAX_AGE", "0" if DEBUG else "60"))
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=db_conn_max_age,
-            conn_health_checks=True,
+            conn_max_age=600,
         )
     }
 
@@ -191,6 +187,7 @@ REST_FRAMEWORK = {
     # Use JWT for authentication
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        "rest_framework.authentication.SessionAuthentication",
     ),
 
     # Default permission (can override in views later)
@@ -283,3 +280,17 @@ CELERY_QUEUES = {
 
 # Default queue for tasks
 CELERY_DEFAULT_QUEUE = 'default'
+
+
+SWAGGER_SETTINGS = {
+    "USE_SESSION_AUTH": False,
+    "SECURITY_REQUIREMENTS": [{"Bearer": []}],
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": 'JWT Authorization header using the Bearer scheme. Example: "Bearer <token>"',
+        }
+    },
+}
