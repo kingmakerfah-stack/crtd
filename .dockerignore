@@ -15,5 +15,6 @@ venv/
 .env
 celerybeat-schedule*
 *.pid
-
+docker-compose.yml
+Dockerfile
 
