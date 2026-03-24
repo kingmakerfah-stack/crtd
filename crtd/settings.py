@@ -55,7 +55,7 @@ INSTALLED_APPS = [
     'accounts',
     'Student',
     'admin_panel',
-    'Jobs.apps.JobsConfig',
+    'jobs.apps.JobsConfig',
     'payments',
 ]
 
