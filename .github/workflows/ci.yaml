@@ -3,10 +3,10 @@ name: Django CI/CD Pipeline
 on:
   push:
     branches:
-      - dev
+      - staging
   pull_request:
     branches:
-      - dev
+      - staging
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -186,13 +186,13 @@ jobs:
           path: trivy-image-report.txt
 
   # ────────────────────────────────────────────────────────────
-  # JOB 4 — Deploy to server (push to dev only)
+  # JOB 4 — Deploy to server (push to staging only)
   # ────────────────────────────────────────────────────────────
   deploy:
     name: 🚀 Deploy Backend to Server
     runs-on: ubuntu-latest
     needs: docker-scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
 
     steps:
       - name: 🐳 SSH & Deploy via Docker
@@ -215,9 +215,9 @@ jobs:
             cd app/crtd-backend/crtd-backend-v2
 
             echo "──────────────────────────────────────"
-            echo "⬇️  Pulling latest code from dev"
+            echo "⬇️  Pulling latest code from staging"
             echo "──────────────────────────────────────"
-            git pull origin dev
+            git pull origin staging
 
             echo "──────────────────────────────────────"
             echo "🛑 Stopping running container (if any)"
