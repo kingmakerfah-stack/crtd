@@ -37,7 +37,7 @@ SECRET_KEY = 'django-insecure-vo@zl!k(=a(ixsgs+g%z!a8$r)ag(r#oz4sa&1*^kg@x3ebs%a
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost').split(',')
 
 
 # Application definition
@@ -55,7 +55,7 @@ INSTALLED_APPS = [
     'accounts',
     'Student',
     'admin_panel',
-    'Jobs.apps.JobsConfig',
+    'jobs.apps.JobsConfig',
     'payments',
 ]
 
@@ -147,6 +147,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
