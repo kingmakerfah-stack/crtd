@@ -68,7 +68,14 @@ def generate_otp(length=4):
         - Should never be logged or exposed in error messages
         - The OTP should be sent via email, not SMS, for this implementation
     """
-    return ''.join(secrets.choice(string.digits) for _ in range(length))
+    if length <= 0:
+        raise ValueError("OTP length must be greater than 0")
+
+    # Avoid leading zero to prevent client-side numeric inputs from dropping it.
+    first_digit = secrets.choice("123456789")
+    if length == 1:
+        return first_digit
+    return first_digit + ''.join(secrets.choice(string.digits) for _ in range(length - 1))
 
 
 class EmailService:
@@ -389,8 +396,19 @@ class EmailService:
                 'message': 'OTP has already been used.'
             }
 
+        submitted_otp = str(otp_code).strip()
+        stored_otp = str(otp_instance.otp).strip()
+
+        # Some clients send OTP as numeric value and can drop leading zeros.
+        if (
+            submitted_otp.isdigit()
+            and stored_otp.isdigit()
+            and len(submitted_otp) < len(stored_otp)
+        ):
+            submitted_otp = submitted_otp.zfill(len(stored_otp))
+
         # Check if OTP matches
-        if otp_instance.otp != otp_code:
+        if stored_otp != submitted_otp:
             return {
                 'success': False,
                 'message': 'Invalid OTP. Please try again.'
