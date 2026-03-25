@@ -14,6 +14,7 @@ from .serializers import (
     OTPRequestSerializer,
     OTPVerificationSerializer,
     PasswordResetSerializer,
+    UserLoginSerializer,
     AdminLoginSerializer,
     AdminLoginVerifySerializer,
 )
@@ -23,8 +24,6 @@ from pre_application.models import ReferalCode , PreApplication
 from rest_framework.generics import get_object_or_404
 from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
 from django.db import transaction
-from django.core import signing
-from django.core.signing import BadSignature, SignatureExpired
 
 
 class GoogleAuthView(APIView):
@@ -120,41 +119,27 @@ class RegisterAPIView(APIView):
 
     @swagger_auto_schema(
         request_body=RegisterSerializer,
-        responses={201: "Created", 400: "Bad Request"},
+        responses={
+            201: "Created",
+            400: "Bad Request - invalid or missing reference code.",
+        },
         tags=["Accounts"],
+        operation_description=(
+            "Register a student account after referral validation. "
+            "Send reference_code from the referral validation API in the request body."
+        ),
     )
     @transaction.atomic
     def post(self, request):
-        referral_access_token = request.data.get("referral_access_token")
-        referral_code = request.data.get("referral_code")
+        reference_code = request.data.get("reference_code")
 
-        referral = None
-        if referral_access_token:
-            try:
-                payload = signing.loads(
-                    referral_access_token,
-                    salt="referral-access",
-                    max_age=60 * 60 * 24,
-                )
-                referral = get_object_or_404(ReferalCode, id=payload.get("referral_id"))
-            except SignatureExpired:
-                return Response(
-                    {"error": "Referral access token has expired."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except BadSignature:
-                return Response(
-                    {"error": "Invalid referral access token."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        elif referral_code:
-            # Backward compatibility for existing clients.
-            referral = get_object_or_404(ReferalCode, code=referral_code)
-        else:
+        if not reference_code:
             return Response(
-                {"error": "Referral access token or referral code is required."},
+                {"error": "reference_code is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        referral = get_object_or_404(ReferalCode, code=reference_code)
 
         # 2️⃣ Validate referral
         if referral.is_used:
@@ -260,16 +245,21 @@ class LoginView(APIView):
 
     permission_classes = [AllowAny]  # Anyone can attempt login
     @swagger_auto_schema(
+    request_body=UserLoginSerializer,
     responses={
         200: "Login successful.",
-        401: "Invalid email or password."
+        401: "Invalid email or password.",
+        403: "Email not verified.",
     },
     tags=["Accounts"],
     operation_description="Login user using email and password."
     )
     def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
+        serializer = UserLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        password = serializer.validated_data["password"]
 
         # Authenticate user using Django's authentication system
         user = authenticate(request, email=email, password=password)
@@ -535,7 +525,7 @@ class AdminLoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        EmailService.send_verification_otp(user, purpose='login_otp')
+        EmailService.send_verification_otp(user, purpose='login_otp', otp_length=6)
 
         return Response({"message": "OTP sent"}, status=status.HTTP_200_OK)
 
