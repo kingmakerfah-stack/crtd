@@ -7,10 +7,21 @@ User = get_user_model()
 class RoleBasedRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     confirm_password = serializers.CharField(write_only=True)
+    reference_code = serializers.CharField(
+        write_only=True,
+        required=True,
+        help_text="Reference code returned by referral validation endpoint.",
+    )
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'confirm_password', 'role']
+        fields = [
+            'email',
+            'password',
+            'confirm_password',
+            'role',
+            'reference_code',
+        ]
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -28,6 +39,7 @@ class RoleBasedRegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('confirm_password')
+        validated_data.pop('reference_code', None)
 
         user = User.objects.create_user(
             email=validated_data['email'],
@@ -91,6 +103,11 @@ class PasswordResetSerializer(serializers.Serializer):
                 "No user found with this email address."
             )
         return value
+
+
+class UserLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
 
 
 class AdminLoginSerializer(serializers.Serializer):
