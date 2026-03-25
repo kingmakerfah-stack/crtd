@@ -15,7 +15,7 @@ from pre_application.models import PreApplication, ReferalCode
 from .permissions import IsAdminRole
 from datetime import timedelta
 from payments.models import Payment
-from Jobs.models import Job
+from jobs.models import Job
 from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer,CompanyPartnersSerializer
 
 class EnquiryAnalyticsView(APIView):
