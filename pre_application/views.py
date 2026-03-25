@@ -123,7 +123,6 @@ class CreateReferralAPIView(APIView):
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
-from django.core import signing
 
 
 class CheckReferralCodeAPIView(APIView):
@@ -147,9 +146,11 @@ class CheckReferralCodeAPIView(APIView):
                 response={
                     "type": "object",
                     "properties": {
+                        "full_name": {"type": "string"},
                         "first_name": {"type": "string"},
                         "last_name": {"type": "string"},
                         "email": {"type": "string"},
+                        "reference_code": {"type": "string"},
                         "whatsapp_no": {"type": "string"},
                         "alternate_phone": {"type": "string"},
                     },
@@ -161,16 +162,14 @@ class CheckReferralCodeAPIView(APIView):
     def get(self, request, code):
         referral = get_object_or_404(ReferalCode, code=code)
         pre_app = referral.student
-        referral_access_token = signing.dumps(
-            {"referral_id": referral.id},
-            salt="referral-access"
-        )
+        full_name = f"{pre_app.first_name} {pre_app.last_name}".strip()
 
         return Response({
+            "full_name": full_name,
             "first_name": pre_app.first_name,
             "last_name": pre_app.last_name,
             "email": pre_app.email,
+            "reference_code": referral.code,
             "whatsapp_no": pre_app.whatsapp_no,
             "alternate_phone": pre_app.alternate_phone,
-            "referral_access_token": referral_access_token,
         }, status=status.HTTP_200_OK)
