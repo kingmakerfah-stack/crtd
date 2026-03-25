@@ -57,7 +57,7 @@ INSTALLED_APPS = [
     'admin_panel',
     'admin_analytics',
     'subscription.apps.SubscriptionConfig',
-    'Jobs',
+    'jobs',
     'payments',
 ]
 

@@ -35,7 +35,7 @@ urlpatterns = [
     path('api/accounts/', include('accounts.urls')),
 
 
-    path('api/jobs/',include('Jobs.urls')),
+    path('api/jobs/',include('jobs.urls')),
 
     # Include admin panel routes
     path('api/admin-panel/', include('admin_panel.urls')),
