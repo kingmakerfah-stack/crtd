@@ -3,10 +3,10 @@ name: Django CI/CD Pipeline
 on:
   push:
     branches:
-      - dev
+      - staging
   pull_request:
     branches:
-      - dev
+      - staging
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -186,3 +186,56 @@ jobs:
         with:
           name: trivy-image-report
           path: trivy-image-report.txt
+
+# ────────────────────────────────────────────────────────────
+# JOB 4 — Deploy to server (push to staging only)
+# ────────────────────────────────────────────────────────────
+ deploy:
+  name: 🚀 Deploy Backend to Server
+  runs-on: ubuntu-latest
+  needs: docker-scan
+  if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+
+  steps:
+    - name: 🐳 SSH & Deploy via Docker
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ubuntu
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT }}
+        script: |
+          echo "Switching to test-deploy user"
+          sudo su - test-deploy << 'EOF'
+          set -e
+
+          echo "Moving into project directory"
+          cd app/crtd-backend/crtd-backend-v2
+
+          echo "Pulling latest code from staging"
+          git pull origin staging
+
+          echo "Moving to docker-compose directory"
+          cd ..
+
+          echo "Stopping & removing containers"
+          docker-compose down --remove-orphans
+
+          echo "Removing old images"
+          docker rmi backend || true
+          docker image prune -f
+
+          echo "Building & starting containers"
+          docker-compose up -d --build --no-cache
+
+          echo "Verifying containers are running"
+          docker ps | grep backend
+          docker ps | grep redis
+          docker ps | grep postgres
+
+          echo "Checking app health"
+          sleep 5
+          curl -sI http://localhost:8000
+
+          echo "Backend deployed successfully!"
+          EOF
