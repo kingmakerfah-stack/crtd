@@ -190,7 +190,7 @@ jobs:
 # ────────────────────────────────────────────────────────────
 # JOB 4 — Deploy to server (push to staging only)
 # ────────────────────────────────────────────────────────────
- deploy:
+deploy:
   name: 🚀 Deploy Backend to Server
   runs-on: ubuntu-latest
   needs: docker-scan
