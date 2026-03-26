@@ -215,9 +215,6 @@ jobs:
             echo "Pulling latest code from staging"
             git pull origin staging
 
-            echo "Moving to docker-compose directory"
-            cd ..
-
             echo "Stopping & removing backend containers only"
             docker stop backend | true
             docker rm -f backend | true
