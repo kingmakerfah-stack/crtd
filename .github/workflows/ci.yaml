@@ -222,11 +222,11 @@ jobs:
             docker-compose down --remove-orphans
 
             echo "Removing old images"
-            docker rmi backend || true
+            docker rmi -f backend || true
             docker image prune -f
 
             echo "Building & starting containers"
-            docker-compose up -d --build --no-cache
+            docker-compose up -d --build
 
             echo "Verifying containers are running"
             docker ps | grep backend
