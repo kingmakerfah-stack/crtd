@@ -231,8 +231,11 @@ jobs:
             docker ps | grep redis
             docker ps | grep postgres
 
-            echo "Checking app health"
-            sleep 25
+            echo "waiting for backend to be healthy"
+            until [ "$(docker inspect -f '{{.State.Health.Status}}' backend)" = "healthy" ]; do
+              echo "waiting..."
+              sleep 3
+            done
             curl -sI http://localhost:8000
 
             echo "Backend deployed successfully!"
