@@ -118,9 +118,11 @@ jobs:
       # ── pip-audit: dependency vulnerability check ────────────
       - name: 🛡️ pip-audit — dependency vulnerability check
         run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install pip-audit
           pip-audit --format json -o pip-audit-report.json || true
-          pip-audit
+          pip-audit -r requirements.txt
 
       - name: 📋 Upload pip-audit report
         if: always()
