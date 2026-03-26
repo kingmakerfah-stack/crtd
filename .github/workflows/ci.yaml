@@ -150,7 +150,6 @@ jobs:
             docker stop backend || true
             docker rm -f backend || true
             docker rmi -f backend || true
-            docker image prune -f
             docker-compose up -d --build
             docker image prune -f
             sleep 5
