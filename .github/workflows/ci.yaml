@@ -232,7 +232,7 @@ jobs:
             docker ps | grep postgres
 
             echo "Checking app health"
-            sleep 5
+            sleep 25
             curl -sI http://localhost:8000
 
             echo "Backend deployed successfully!"
