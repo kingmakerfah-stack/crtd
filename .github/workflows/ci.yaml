@@ -218,8 +218,9 @@ jobs:
             echo "Moving to docker-compose directory"
             cd ..
 
-            echo "Stopping & removing containers"
-            docker-compose down --remove-orphans
+            echo "Stopping & removing backend containers only"
+            docker stop backend | true
+            docker rm -f backend | true
 
             echo "Removing old images"
             docker rmi -f backend || true
