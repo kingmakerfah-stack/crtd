@@ -185,81 +185,55 @@ jobs:
           name: trivy-image-report
           path: trivy-image-report.txt
 
-  # ────────────────────────────────────────────────────────────
-  # JOB 4 — Deploy to server (push to staging only)
-  # ────────────────────────────────────────────────────────────
-  deploy:
-    name: 🚀 Deploy Backend to Server
-    runs-on: ubuntu-latest
-    needs: docker-scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+# ────────────────────────────────────────────────────────────
+# JOB 4 — Deploy to server (push to staging only)
+# ────────────────────────────────────────────────────────────
+ deploy:
+  name: 🚀 Deploy Backend to Server
+  runs-on: ubuntu-latest
+  needs: docker-scan
+  if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
 
-    steps:
-      - name: 🐳 SSH & Deploy via Docker
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          script: |
-            echo "──────────────────────────────────────"
-            echo "👤 Switching to test-deploy user"
-            echo "──────────────────────────────────────"
-            sudo su - test-deploy << 'EOF'
-            set -e
+  steps:
+    - name: 🐳 SSH & Deploy via Docker
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ubuntu
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT }}
+        script: |
+          echo "Switching to test-deploy user"
+          sudo su - test-deploy << 'EOF'
+          set -e
 
-            echo "──────────────────────────────────────"
-            echo "📁 Moving into project directory"
-            echo "──────────────────────────────────────"
-            cd app/crtd-backend/crtd-backend-v2
+          echo "Moving into project directory"
+          cd app/crtd-backend/crtd-backend-v2
 
-            echo "──────────────────────────────────────"
-            echo "⬇️  Pulling latest code from staging"
-            echo "──────────────────────────────────────"
-            git pull origin staging
+          echo "Pulling latest code from staging"
+          git pull origin staging
 
-            echo "──────────────────────────────────────"
-            echo "🛑 Stopping running container (if any)"
-            echo "──────────────────────────────────────"
-            docker stop backend || true
-            docker rm   backend || true
+          echo "Moving to docker-compose directory"
+          cd ..
 
-            echo "──────────────────────────────────────"
-            echo "🗑️  Removing old Docker image (if any)"
-            echo "──────────────────────────────────────"
-            docker rmi backend || true
+          echo "Stopping & removing containers"
+          docker-compose down --remove-orphans
 
-            echo "──────────────────────────────────────"
-            echo "🔨 Building new Docker image"
-            echo "──────────────────────────────────────"
-            docker build -t backend .
+          echo "Removing old images"
+          docker rmi backend || true
+          docker image prune -f
 
-            echo "──────────────────────────────────────"
-            echo "🔎 Verifying image was created"
-            echo "──────────────────────────────────────"
-            docker images | grep backend
+          echo "Building & starting containers"
+          docker-compose up -d --build --no-cache
 
-            echo "──────────────────────────────────────"
-            echo "▶️  Running new container"
-            echo "──────────────────────────────────────"
-            docker run -d \
-              --name backend \
-              --restart unless-stopped \
-              -p 8000:8000 \
-              backend
+          echo "Verifying containers are running"
+          docker ps | grep backend
+          docker ps | grep redis
+          docker ps | grep postgres
 
-            echo "──────────────────────────────────────"
-            echo "🧹 Cleaning up unused Docker resources"
-            echo "──────────────────────────────────────"
-            docker image prune -f
+          echo "Checking app health"
+          sleep 5
+          curl -sI http://localhost:8000
 
-            echo "──────────────────────────────────────"
-            echo "✅ Backend deployed successfully!"
-            echo "Container status:"
-            docker ps | grep backend
-            echo "──────────────────────────────────────"
-            echo "🏥 Checking app health"
-            echo "──────────────────────────────────────"
-            curl -sI http://localhost:8000
-            EOF
+          echo "Backend deployed successfully!"
+          EOF
