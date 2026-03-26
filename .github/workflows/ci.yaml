@@ -3,10 +3,10 @@ name: Django CI/CD Pipeline
 on:
   push:
     branches:
-      - staging
+      - dev
   pull_request:
     branches:
-      - staging
+      - dev
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -186,57 +186,3 @@ jobs:
         with:
           name: trivy-image-report
           path: trivy-image-report.txt
-
-  # ────────────────────────────────────────────────────────────
-  # JOB 4 — Deploy to server (push to staging only)
-  # ────────────────────────────────────────────────────────────
-  deploy:
-    name: 🚀 Deploy Backend to Server
-    runs-on: ubuntu-latest
-    needs: docker-scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-
-    steps:
-      - name: 🐳 SSH & Deploy via Docker
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          script: |
-            echo "Switching to test-deploy user"
-            sudo su - test-deploy << 'EOF'
-            set -e
-
-            echo "Moving into project directory"
-            cd app/crtd-backend/crtd-backend-v2
-
-            echo "Pulling latest code from staging"
-            git pull origin staging
-
-            echo "Stopping & removing backend containers only"
-            docker stop backend | true
-            docker rm -f backend | true
-
-            echo "Removing old images"
-            docker rmi -f backend || true
-            docker image prune -f
-
-            echo "Building & starting containers"
-            docker-compose up -d --build
-
-            echo "Verifying containers are running"
-            docker ps | grep backend
-            docker ps | grep redis
-            docker ps | grep postgres
-
-            echo "waiting for backend to be healthy"
-            until [ "$(docker inspect -f '{{.State.Health.Status}}' backend)" = "healthy" ]; do
-              echo "waiting..."
-              sleep 3
-            done
-            curl -sI http://localhost:8000
-
-            echo "Backend deployed successfully!"
-            EOF
