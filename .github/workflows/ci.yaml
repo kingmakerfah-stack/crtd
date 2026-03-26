@@ -139,7 +139,7 @@ jobs:
           scan-ref: .
           format: table
           output: trivy-fs-report.txt
-          exit-code: "1"               # fail pipeline on HIGH or CRITICAL
+          exit-code: "1"
           severity: HIGH,CRITICAL
           scanners: vuln,secret
 
@@ -176,7 +176,7 @@ jobs:
           image-ref: crtd-backend-image:ci
           format: table
           output: trivy-image-report.txt
-          exit-code: "1"               # fail pipeline on HIGH or CRITICAL
+          exit-code: "1"
           severity: HIGH,CRITICAL
           scanners: vuln,secret
 
