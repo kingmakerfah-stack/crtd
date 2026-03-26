@@ -186,9 +186,3 @@ jobs:
         with:
           name: trivy-image-report
           path: trivy-image-report.txt
-
- 
-            echo "🏥 Checking app health"
-            echo "──────────────────────────────────────"
-            curl -sI http://localhost:8000
-            EOF
