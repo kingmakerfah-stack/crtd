@@ -3,9 +3,11 @@ name: Django CI/CD Pipeline
 on:
   push:
     branches:
+      - dev
       - staging
   pull_request:
     branches:
+      - dev
       - staging
 
 jobs:
@@ -48,156 +50,92 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
 
     steps:
-      - name: ⬇️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: "pip"
 
-      - name: 📦 Install dependencies
-        run: |
+      - run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🗄️ Run migrations
-        run: python manage.py migrate --noinput
-
-      - name: ✅ Run tests
-        run: python manage.py test --verbosity=2
+      - run: python manage.py migrate --noinput
+      - run: python manage.py test --verbosity=2
 
   # ────────────────────────────────────────────────────────────
-  # JOB 2 — Security Scans (code + dependencies + filesystem)
+  # JOB 2 — Security Scans
   # ────────────────────────────────────────────────────────────
   security:
     name: 🔒 Security Scans
     runs-on: ubuntu-latest
     needs: test
 
-    permissions:
-      actions: read
-      contents: read
-
     steps:
-      - name: ⬇️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: "pip"
 
-      - name: 📦 Install security tools
-        run: |
+      - run: |
           python -m pip install --upgrade pip
           pip install bandit
 
-      # ── Bandit: static code analysis ──────────────────────
-      - name: 🕵️ Bandit — static code security analysis
+      - name: Bandit
         run: |
-          bandit -r . \
-            --exclude ./.venv,./venv,./env,./tests \
-            --severity-level medium \
-            --confidence-level medium \
-            -f json -o bandit-report.json || true
-          bandit -r . \
-            --exclude ./.venv,./venv,./env,./tests \
-            --severity-level medium \
-            --confidence-level medium
+          bandit -r . --exclude ./.venv,./venv,./env,./tests \
+          --severity-level medium --confidence-level medium || true
 
-      - name: 📋 Upload Bandit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-report
-          path: bandit-report.json
-
-      # ── pip-audit: dependency vulnerability check ────────────
-      - name: 🛡️ pip-audit — dependency vulnerability check
+      - name: pip-audit
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pip-audit
-          pip-audit --format json -o pip-audit-report.json || true
-          pip-audit -r requirements.txt
+          pip-audit -r requirements.txt || true
 
-      - name: 📋 Upload pip-audit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pip-audit-report
-          path: pip-audit-report.json
-
-      # ── Trivy: filesystem scan (secrets + vulns) ───────────
-      - name: 🔍 Trivy — filesystem scan (secrets + vulns)
+      - name: Trivy FS
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: .
-          format: table
-          output: trivy-fs-report.txt
-          exit-code: "1"
           severity: HIGH,CRITICAL
-          scanners: vuln,secret
-
-      - name: 📋 Upload Trivy filesystem report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-fs-report
-          path: trivy-fs-report.txt
+          exit-code: "1"
 
   # ────────────────────────────────────────────────────────────
-  # JOB 3 — Build Docker image & scan it with Trivy
+  # JOB 3 — Docker Scan
   # ────────────────────────────────────────────────────────────
   docker-scan:
-    name: 🐳 Docker Build & Image Scan
+    name: 🐳 Docker Scan
     runs-on: ubuntu-latest
     needs: security
 
-    permissions:
-      actions: read
-      contents: read
-
     steps:
-      - name: ⬇️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🔨 Build Docker image
-        run: docker build -t crtd-backend-image:ci .
+      - run: docker build -t crtd-backend-image:ci .
 
-      - name: 🔍 Trivy — scan Docker image (secrets + vulns)
-        uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@master
         with:
           scan-type: image
           image-ref: crtd-backend-image:ci
-          format: table
-          output: trivy-image-report.txt
-          exit-code: "1"
           severity: HIGH,CRITICAL
-          scanners: vuln,secret
-
-      - name: 📋 Upload Trivy image report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-image-report
-          path: trivy-image-report.txt
+          exit-code: "1"
 
   # ────────────────────────────────────────────────────────────
-  # JOB 4 — Deploy to server (push to staging only)
+  # JOB 4 — Deploy (ONLY for staging)
   # ────────────────────────────────────────────────────────────
   deploy:
-    name: 🚀 Deploy Backend to Server
+    name: 🚀 Deploy to Staging
     runs-on: ubuntu-latest
     needs: docker-scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+
+    # 🔥 IMPORTANT CONDITION
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
 
     steps:
-      - name: 🐳 SSH & Deploy via Docker
+      - name: SSH Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -207,32 +145,13 @@ jobs:
           script: |
             sudo su - test-deploy << 'EOF'
             set -e
-
-            echo "Moving into project directory"
             cd app/crtd-backend/crtd-backend-v2
-
-            echo "Pulling latest code from staging"
             git pull origin staging
-
-            echo "Stopping & removing backend container only"
             docker stop backend || true
             docker rm -f backend || true
-
-            echo "Removing old backend image"
             docker rmi -f backend || true
             docker image prune -f
-
-            echo "Building & starting containers"
             docker-compose up -d --build
-
-            echo "Verifying containers are running"
-            docker ps | grep backend
-            docker ps | grep redis
-            docker ps | grep postgres
-
-            echo "Checking app health"
             sleep 5
             curl -sI http://localhost:8000
-
-            echo "Backend deployed successfully!"
             EOF
