@@ -35,18 +35,20 @@ class Migration(migrations.Migration):
             name="enquiry_token",
             field=models.CharField(
                 blank=True,
-                db_index=True,
                 editable=False,
                 max_length=9,
                 null=True,
             ),
         ),
         migrations.RunPython(backfill_enquiry_tokens, migrations.RunPython.noop),
+        migrations.RunSQL(
+            sql="DROP INDEX IF EXISTS pre_application_preapplication_enquiry_token_9607cabb_like;",
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         migrations.AlterField(
             model_name="preapplication",
             name="enquiry_token",
             field=models.CharField(
-                db_index=True,
                 editable=False,
                 max_length=9,
                 unique=True,

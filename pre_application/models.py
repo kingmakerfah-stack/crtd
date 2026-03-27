@@ -12,7 +12,6 @@ class PreApplication(models.Model):
     enquiry_token = models.CharField(
         max_length=9,
         unique=True,
-        db_index=True,
         editable=False,
     )
     first_name = models.CharField(max_length=50)
