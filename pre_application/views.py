@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from admin_panel.permissions import IsSuperuserOrAdminOrSubadmin
 
 from .models import PreApplication, ReferalCode
+from .pagination import PreApplicationPagination
 from .serializers import (
     PreApplicationLookupSerializer,
     PreApplicationSerializer,
@@ -85,6 +86,59 @@ class PreApplicationCreateView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+class PreApplicationListAPIView(APIView):
+    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    pagination_class = PreApplicationPagination
+
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        manual_parameters=[
+            openapi.Parameter(
+                "page",
+                openapi.IN_QUERY,
+                description="Page number",
+                type=openapi.TYPE_INTEGER,
+                required=False,
+            ),
+            openapi.Parameter(
+                "page_size",
+                openapi.IN_QUERY,
+                description="Items per page",
+                type=openapi.TYPE_INTEGER,
+                required=False,
+            ),
+        ],
+        responses={
+            200: openapi.Response(
+                description="Paginated list of pre-applications for admin panel.",
+                examples={
+                    "application/json": {
+                        "count": 2,
+                        "next": None,
+                        "previous": None,
+                        "results": [
+                            LOOKUP_RESPONSE_EXAMPLE,
+                        ],
+                    }
+                },
+            ),
+            401: "Authentication credentials were not provided.",
+            403: "You do not have permission to perform this action.",
+        },
+        operation_description=(
+            "List pre-applications for the custom admin panel. "
+            "Each row includes the enquiry token and referral-linked summary fields."
+        ),
+    )
+    def get(self, request):
+        queryset = PreApplication.objects.select_related("referal_codes").order_by("-created_at")
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = PreApplicationLookupSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+
 class PreApplicationByEnquiryTokenAPIView(APIView):
     permission_classes = [IsSuperuserOrAdminOrSubadmin]
 
@@ -118,6 +172,63 @@ class PreApplicationByEnquiryTokenAPIView(APIView):
             PreApplication.objects.select_related("referal_codes"),
             enquiry_token=token,
         )
+        serializer = PreApplicationLookupSerializer(pre_application)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PreApplicationLookupAPIView(APIView):
+    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        manual_parameters=[
+            openapi.Parameter(
+                "email",
+                openapi.IN_QUERY,
+                description="Unique candidate email address",
+                type=openapi.TYPE_STRING,
+                required=False,
+            ),
+            openapi.Parameter(
+                "enquiry_token",
+                openapi.IN_QUERY,
+                description="Unique enquiry token in ENQ123456 format",
+                type=openapi.TYPE_STRING,
+                required=False,
+            ),
+        ],
+        responses={
+            200: openapi.Response(
+                description="Candidate details found.",
+                schema=PreApplicationLookupSerializer,
+                examples={"application/json": LOOKUP_RESPONSE_EXAMPLE},
+            ),
+            400: "Provide exactly one of email or enquiry_token.",
+            401: "Authentication credentials were not provided.",
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+        operation_description=(
+            "Fetch a specific pre-application by unique email or enquiry token for the admin panel."
+        ),
+    )
+    def get(self, request):
+        email = (request.query_params.get("email") or "").strip()
+        enquiry_token = (request.query_params.get("enquiry_token") or "").strip().upper()
+
+        if bool(email) == bool(enquiry_token):
+            return Response(
+                {"error": "Provide exactly one of email or enquiry_token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        queryset = PreApplication.objects.select_related("referal_codes")
+        if email:
+            pre_application = get_object_or_404(queryset, email=email)
+        else:
+            pre_application = get_object_or_404(queryset, enquiry_token=enquiry_token)
+
         serializer = PreApplicationLookupSerializer(pre_application)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
