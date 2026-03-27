@@ -4,12 +4,16 @@ from .views import (
     CheckReferralCodeAPIView,
     CreateReferralAPIView,
     CreateReferralByEnquiryTokenAPIView,
+    PreApplicationListAPIView,
+    PreApplicationLookupAPIView,
     PreApplicationByEnquiryTokenAPIView,
     PreApplicationCreateView,
 )
 
 urlpatterns = [
     path("submit-form/", PreApplicationCreateView.as_view(), name="pre-application-create"),
+    path("admin/list/", PreApplicationListAPIView.as_view(), name="pre-application-list"),
+    path("admin/lookup/", PreApplicationLookupAPIView.as_view(), name="pre-application-lookup"),
     path(
         "enquiry/<str:enquiry_token>/",
         PreApplicationByEnquiryTokenAPIView.as_view(),
