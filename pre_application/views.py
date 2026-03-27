@@ -1,15 +1,62 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-
-from .models import PreApplication
-from .serializers import PreApplicationSerializer , ReferalCodeSerializer
+from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from utils.email_service import EmailService
+from rest_framework import status
 from rest_framework.generics import get_object_or_404
-from .models import ReferalCode
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from admin_panel.permissions import IsSuperuserOrAdminOrSubadmin
+
+from .models import PreApplication, ReferalCode
+from .serializers import (
+    PreApplicationLookupSerializer,
+    PreApplicationSerializer,
+    ReferalCodeSerializer,
+    ReferralValidationResponseSerializer,
+)
+from .services import ReferralGenerationError, create_referral_for_pre_application
+
+
+SUBMIT_RESPONSE_EXAMPLE = {
+    "enquiry_token": "ENQ000123",
+    "first_name": "Asha",
+    "last_name": "Patel",
+    "email": "asha@example.com",
+    "whatsapp_no": "+919876543210",
+    "alternate_phone": None,
+    "birthplace_state": "Gujarat",
+    "qualification": "B.Tech",
+    "specialization": "CSE",
+    "college_name": "Example College",
+    "college_state": "Gujarat",
+    "passing_year": "2024",
+    "preferred_time": "Evening",
+    "verified": False,
+    "created_at": "2026-03-27T09:00:00Z",
+}
+
+LOOKUP_RESPONSE_EXAMPLE = {
+    "id": 12,
+    "enquiry_token": "ENQ000123",
+    "full_name": "Asha Patel",
+    "first_name": "Asha",
+    "last_name": "Patel",
+    "email": "asha@example.com",
+    "whatsapp_no": "+919876543210",
+    "alternate_phone": None,
+    "verified": True,
+    "reference_code": "AB12CD34",
+}
+
+REFERRAL_CREATE_RESPONSE_EXAMPLE = {
+    "id": 5,
+    "student": 12,
+    "code": "AB12CD34",
+    "is_used": False,
+    "created_at": "2026-03-27T09:10:00Z",
+    "message": "Referral code created and approval email sent",
+}
 
 
 class PreApplicationCreateView(APIView):
@@ -18,158 +65,185 @@ class PreApplicationCreateView(APIView):
     @swagger_auto_schema(
         request_body=PreApplicationSerializer,
         responses={
-            201: PreApplicationSerializer,
-            400: "Validation Error"
+            201: openapi.Response(
+                description="Pre-application created successfully.",
+                schema=PreApplicationSerializer,
+                examples={"application/json": SUBMIT_RESPONSE_EXAMPLE},
+            ),
+            400: "Validation Error",
         },
         tags=["Pre Application"],
-        operation_description="Create a new pre-application"
+        operation_description=(
+            "Submit the pre-application form. "
+            "The backend generates a unique enquiry token and returns it in the success payload."
+        ),
     )
     def post(self, request):
         serializer = PreApplicationSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-class ReferalCodeCreateView(APIView):
-    permission_classes = [AllowAny]
-    @swagger_auto_schema(
-        request_body=ReferalCodeSerializer,
-        responses={
-            201: ReferalCodeSerializer,
-            400: "Validation Error"
-        },
-        tags=["Pre Application"],
-        operation_description="Create a new referral code"
-    )
-    def post(self, request):
-        serializer = ReferalCodeSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class CreateReferralAPIView(APIView):
+class PreApplicationByEnquiryTokenAPIView(APIView):
     permission_classes = [IsSuperuserOrAdminOrSubadmin]
-    """
-    Create a referral code for a pre-application and send approval email.
-    
-    When a referral code is successfully created, an approval email is
-    automatically sent to the student using the EmailService.
-    """
 
     @swagger_auto_schema(
         security=[{"Bearer": []}],
         tags=["Pre Application"],
-        operation_description="Protected endpoint to generate a referral code for a pre-application.",
+        manual_parameters=[
+            openapi.Parameter(
+                "enquiry_token",
+                openapi.IN_PATH,
+                description="Enquiry token in ENQ123456 format",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Candidate details found for enquiry token.",
+                schema=PreApplicationLookupSerializer,
+                examples={"application/json": LOOKUP_RESPONSE_EXAMPLE},
+            ),
+            401: "Authentication credentials were not provided.",
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+        operation_description="Fetch candidate details by enquiry token for admin referral workflows.",
     )
+    def get(self, request, enquiry_token):
+        token = enquiry_token.strip().upper()
+        pre_application = get_object_or_404(
+            PreApplication.objects.select_related("referal_codes"),
+            enquiry_token=token,
+        )
+        serializer = PreApplicationLookupSerializer(pre_application)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+class BaseCreateReferralAPIView(APIView):
+    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+
+    def create_referral_response(self, pre_application):
+        try:
+            referral = create_referral_for_pre_application(pre_application)
+        except ReferralGenerationError as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = ReferalCodeSerializer(referral)
+        return Response(
+            {
+                **serializer.data,
+                "message": "Referral code created and approval email sent",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CreateReferralByEnquiryTokenAPIView(BaseCreateReferralAPIView):
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        manual_parameters=[
+            openapi.Parameter(
+                "enquiry_token",
+                openapi.IN_PATH,
+                description="Enquiry token in ENQ123456 format",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
+        responses={
+            201: openapi.Response(
+                description="Referral code created successfully.",
+                schema=ReferalCodeSerializer,
+                examples={"application/json": REFERRAL_CREATE_RESPONSE_EXAMPLE},
+            ),
+            400: "Referral already exists for this student",
+            401: "Authentication credentials were not provided.",
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+        operation_description=(
+            "Generate a referral code for a pre-application identified by enquiry token. "
+            "This is the canonical admin route."
+        ),
+    )
+    def post(self, request, enquiry_token):
+        token = enquiry_token.strip().upper()
+        pre_application = get_object_or_404(PreApplication, enquiry_token=token)
+        return self.create_referral_response(pre_application)
+
+
+class CreateReferralAPIView(BaseCreateReferralAPIView):
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        manual_parameters=[
+            openapi.Parameter(
+                "pk",
+                openapi.IN_PATH,
+                description="Pre-application primary key",
+                type=openapi.TYPE_INTEGER,
+                required=True,
+            )
+        ],
+        responses={
+            201: openapi.Response(
+                description="Referral code created successfully.",
+                schema=ReferalCodeSerializer,
+                examples={"application/json": REFERRAL_CREATE_RESPONSE_EXAMPLE},
+            ),
+            400: "Referral already exists for this student",
+            401: "Authentication credentials were not provided.",
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+        operation_description=(
+            "Generate a referral code for a pre-application identified by primary key. "
+            "This legacy admin route is retained for backward compatibility."
+        ),
+    )
     def post(self, request, pk):
-        """
-        Generate a referral code for a student and send approval email.
-        
-        Args:
-            pk: The primary key of the PreApplication instance
-            
-        Returns:
-            201: Referral code created successfully with email sent
-            400: Student already verified or validation error
-            404: PreApplication not found
-        """
-        pre_app = get_object_or_404(PreApplication, pk=pk)
-
-        # Prevent duplicate referral
-        if pre_app.verified:
-            return Response(
-                {"error": "Referral already exists for this student"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serializer = ReferalCodeSerializer(data={
-            "student": pre_app.id
-        })
-
-        if serializer.is_valid():
-            referral = serializer.save()
-            
-            # Mark the student as verified
-            pre_app.verified = True
-            pre_app.save()
-            
-            # Send approval email asynchronously
-            context = {
-                'first_name': pre_app.first_name,
-                'reference_code': referral.code
-            }
-            EmailService.send_approval_email(pre_app.email, context)
-            
-            return Response(
-                {
-                    **serializer.data,
-                    "message": "Referral code created and approval email sent"
-                },
-                status=status.HTTP_201_CREATED
-            )
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-# referal code view to check if the referal code is valid or not and return the pre application details if valid
-
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
-from drf_spectacular.types import OpenApiTypes
+        pre_application = get_object_or_404(PreApplication, pk=pk)
+        return self.create_referral_response(pre_application)
 
 
 class CheckReferralCodeAPIView(APIView):
     permission_classes = [AllowAny]
 
-    @extend_schema(
-        summary="Validate referral code",
-        description="Check if a referral code is valid and return associated pre-application details.",
-        parameters=[
-            OpenApiParameter(
-                name="code",
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.PATH,
+    @swagger_auto_schema(
+        tags=["Pre Application"],
+        manual_parameters=[
+            openapi.Parameter(
+                "code",
+                openapi.IN_PATH,
                 description="Referral code to validate",
+                type=openapi.TYPE_STRING,
                 required=True,
-            ),
+            )
         ],
         responses={
-            200: OpenApiResponse(
-                description="Referral code is valid",
-                response={
-                    "type": "object",
-                    "properties": {
-                        "full_name": {"type": "string"},
-                        "first_name": {"type": "string"},
-                        "last_name": {"type": "string"},
-                        "email": {"type": "string"},
-                        "reference_code": {"type": "string"},
-                        "whatsapp_no": {"type": "string"},
-                        "alternate_phone": {"type": "string"},
-                    },
-                },
+            200: openapi.Response(
+                description="Referral code is valid.",
+                schema=ReferralValidationResponseSerializer,
+                examples={"application/json": LOOKUP_RESPONSE_EXAMPLE},
             ),
-            404: OpenApiResponse(description="Referral code not found"),
+            404: "Referral code not found",
         },
+        operation_description=(
+            "Validate a referral code and return the linked candidate details "
+            "from the same pre-application record."
+        ),
     )
     def get(self, request, code):
-        referral = get_object_or_404(ReferalCode, code=code)
-        pre_app = referral.student
-        full_name = f"{pre_app.first_name} {pre_app.last_name}".strip()
-
-        return Response({
-            "full_name": full_name,
-            "first_name": pre_app.first_name,
-            "last_name": pre_app.last_name,
-            "email": pre_app.email,
-            "reference_code": referral.code,
-            "whatsapp_no": pre_app.whatsapp_no,
-            "alternate_phone": pre_app.alternate_phone,
-        }, status=status.HTTP_200_OK)
+        referral = get_object_or_404(
+            ReferalCode.objects.select_related("student"),
+            code=code,
+        )
+        serializer = ReferralValidationResponseSerializer(referral.student)
+        return Response(serializer.data, status=status.HTTP_200_OK)

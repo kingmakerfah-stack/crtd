@@ -1,12 +1,15 @@
-from rest_framework import serializers 
-from .models import PreApplication , ReferalCode
 import re
+
+from rest_framework import serializers
+
+from .models import PreApplication, ReferalCode
+
 
 class PreApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PreApplication
         fields = "__all__"
-        read_only_fields = ["verified", "created_at"]
+        read_only_fields = ["enquiry_token", "verified", "created_at"]
 
     def validate_first_name(self, value):
         value = value.strip()
@@ -34,7 +37,7 @@ class PreApplicationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_whatsapp_no(self, value):
-        pattern = r'^(?:\+91)?[6-9]\d{9}$'
+        pattern = r"^(?:\+91)?[6-9]\d{9}$"
 
         if not re.match(pattern, value):
             raise serializers.ValidationError(
@@ -45,7 +48,7 @@ class PreApplicationSerializer(serializers.ModelSerializer):
 
     def validate_alternate_phone(self, value):
         if value:
-            pattern = r'^(?:\+91)?[6-9]\d{9}$'
+            pattern = r"^(?:\+91)?[6-9]\d{9}$"
 
             if not re.match(pattern, value):
                 raise serializers.ValidationError(
@@ -55,7 +58,7 @@ class PreApplicationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        instance = getattr(self, 'instance', None)
+        instance = getattr(self, "instance", None)
 
         if instance:
             if PreApplication.objects.filter(email=value).exclude(pk=instance.pk).exists():
@@ -70,36 +73,41 @@ class PreApplicationSerializer(serializers.ModelSerializer):
 
         return value
 
-import random
-import string
-from .models import ReferalCode
-
 
 class ReferalCodeSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = ReferalCode
-        fields = ['id', 'student', 'code', 'is_used', 'created_at']
-        read_only_fields = ['code', 'is_used', 'created_at']
+        fields = ["id", "student", "code", "is_used", "created_at"]
+        read_only_fields = ["student", "code", "is_used", "created_at"]
 
-    def generate_unique_code(self, length=8):
-        """
-        Generate a unique referral code.
-        """
 
-        while True:
-            code = ''.join(
-                random.choices(string.ascii_uppercase + string.digits, k=length)
-            )
+class PreApplicationLookupSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    reference_code = serializers.SerializerMethodField()
 
-            if not ReferalCode.objects.filter(code=code).exists():
-                return code
+    class Meta:
+        model = PreApplication
+        fields = [
+            "id",
+            "enquiry_token",
+            "full_name",
+            "first_name",
+            "last_name",
+            "email",
+            "whatsapp_no",
+            "alternate_phone",
+            "verified",
+            "reference_code",
+        ]
 
-    def create(self, validated_data):
-        """
-        Override create to auto-generate unique referral code.
-        """
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
 
-        validated_data['code'] = self.generate_unique_code()
+    def get_reference_code(self, obj):
+        referral = getattr(obj, "referal_codes", None)
+        return referral.code if referral else None
 
-        return ReferalCode.objects.create(**validated_data)
+
+class ReferralValidationResponseSerializer(PreApplicationLookupSerializer):
+    class Meta(PreApplicationLookupSerializer.Meta):
+        fields = PreApplicationLookupSerializer.Meta.fields
