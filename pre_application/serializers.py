@@ -80,7 +80,7 @@ class ReferalCodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReferalCode
         fields = ['id', 'student', 'code', 'status', 'created_at']
-        read_only_fields = ['code', 'status', 'created_at']
+        read_only_fields = ['code', 'status', 'created_at','admin']
 
     def generate_unique_code(self, length=8):
         """

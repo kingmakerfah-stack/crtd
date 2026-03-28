@@ -58,6 +58,8 @@ class ReferalCodeCreateView(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class CreateReferralAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    # permission_classes = [AllowAny]
+    
     """
     Create a referral code for a pre-application and send approval email.
     
@@ -77,7 +79,16 @@ class CreateReferralAPIView(APIView):
             400: Student already verified or validation error
             404: PreApplication not found
         """
+        user = request.user  #  from token
+        if not user.is_staff:  # or use custom is_admin
+            return Response(
+                {"error": "Only admin can create referral codes"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+
         pre_app = get_object_or_404(PreApplication, pk=pk)
+
         existing_referral = ReferalCode.objects.filter(student=pre_app).first()
 
         # Prevent duplicate referral based on the actual referral record.
@@ -101,7 +112,7 @@ class CreateReferralAPIView(APIView):
         })
 
         if serializer.is_valid():
-            referral = serializer.save()
+            referral = serializer.save(admin=user)  #set the admin field to the current user creating the referral code 
             
             # Mark the student as verified
             pre_app.verified = True
