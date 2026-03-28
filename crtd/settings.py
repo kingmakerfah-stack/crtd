@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'subscription.apps.SubscriptionConfig',
     'jobs',
     'payments',
+    'applications',
 ]
 
 MIDDLEWARE = [

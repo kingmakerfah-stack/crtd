@@ -46,6 +46,7 @@ urlpatterns = [
     #Include payments routes
     path("api/payments/", include("payments.urls")), 
 
+    path("api/applications/",include("applications.urls"))
 ]
 
 if settings.DEBUG:
