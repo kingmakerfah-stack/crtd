@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 
 
 class PreApplicationCreateView(APIView):
+    permission_classes = [AllowAny]
     @swagger_auto_schema(
         request_body=PreApplicationSerializer,
         responses={

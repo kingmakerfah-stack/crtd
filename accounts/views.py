@@ -133,7 +133,7 @@ class RegisterAPIView(APIView):
         referral = get_object_or_404(ReferalCode, code=referral_code)
 
         # 2️⃣ Validate referral
-        if referral.is_used:
+        if referral.status != "not_used":
             return Response(
                 {"error": "Referral code already used."},
                 status=status.HTTP_400_BAD_REQUEST
