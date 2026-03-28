@@ -4,15 +4,29 @@ from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.exceptions import NotFound
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from .models import Application,CoolDown
-from .serializers import ApplyJobSerializer
+from .serializers import ApplyJobSerializer,CoolDownSerializer
 from jobs.models import Job
+
 from drf_yasg.utils import swagger_auto_schema
 
 class ApplyJobView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+              responses={
+            201: "Application submitted successfully",
+            400: "Profile incomplete or cooldown active",
+            404: "Job not found"
+    },
+        operation_description ="""
+        Apply for a job with cooldown restriction.
+        User must complete profile before applying.
+        After each application, a cooldown period is applied.
+        If user applies before cooldown ends, remaining days will be returned."""
+        )
+    
     def post(self, request, id):
         user = request.user
         student = getattr(user, "student_profile", None)
@@ -57,3 +71,23 @@ class ApplyJobView(APIView):
             }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class CoolDownUpdateView(APIView):
+    permission_classes = [AllowAny]
+    @swagger_auto_schema(
+            request_body = CoolDownSerializer,
+            responses={
+            200: "Cooldown days updated successfully",
+            400: "Validation Error"
+            },
+            operation_description=
+                "This API allows admin to set the cooldown period (in days) between job applications."
+    )
+    def put(self,request):
+        cooldown_days,_=CoolDown.objects.get_or_create(id=1,defaults={"cooldown_days":0})
+
+        serializer=CoolDownSerializer(cooldown_days,data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"message":"Cooldown days updated Successfully"},
+                        status=status.HTTP_200_OK)

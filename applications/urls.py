@@ -1,6 +1,7 @@
 from django.urls import path
-from .models import Application
-from .views import ApplyJobView
+from .views import ApplyJobView,CoolDownUpdateView
+
 urlpatterns = [
-    path('apply-job/<int:id>/',ApplyJobView.as_view())
+    path('apply-job/<int:id>/',ApplyJobView.as_view(),name="apply-job"),
+    path('admin/cooldown-days/update/',CoolDownUpdateView.as_view(),name="cooldown-days-update")
 ]
