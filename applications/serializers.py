@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Application
+from .models import Application,CoolDown
 
 
 class ApplyJobSerializer(serializers.ModelSerializer):
@@ -29,3 +29,16 @@ class ApplyJobSerializer(serializers.ModelSerializer):
             job=job,
             cooldown_days_used=validated_data.get('cooldown_days_used')
         )
+
+
+class CoolDownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CoolDown
+        fields = "__all__"
+
+    def validate_cooldown_days(self,value):
+        if value is None:
+            raise serializers.ValidationError("Cooldown days is required.")
+        if value < 0:
+            raise serializers.ValidationError("Cooldown days can not be negative.")
+        return value
