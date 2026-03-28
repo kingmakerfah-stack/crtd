@@ -3,10 +3,12 @@ name: Django CI/CD Pipeline
 on:
   push:
     branches:
-      - dev-fayaz
+      - dev
+      - staging
   pull_request:
     branches:
-      - dev-fayaz
+      - dev
+      - staging
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -48,166 +50,110 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
 
     steps:
-      - name: ⬇️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: "pip"
 
-      - name: 📦 Install dependencies
-        run: |
+      - run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🗄️ Run migrations
-        run: python manage.py migrate --noinput
-
-      - name: ✅ Run tests
-        run: python manage.py test --verbosity=2
+      - run: python manage.py migrate --noinput
+      - run: python manage.py test --verbosity=2
 
   # ────────────────────────────────────────────────────────────
-  # JOB 2 — Security Scans (code + dependencies + filesystem)
+  # JOB 2 — Security Scans
   # ────────────────────────────────────────────────────────────
   security:
     name: 🔒 Security Scans
     runs-on: ubuntu-latest
     needs: test
 
-    permissions:
-      actions: read
-      contents: read
-
     steps:
-      - name: ⬇️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: "pip"
 
-      - name: 📦 Install security tools
-        run: |
+      - run: |
           python -m pip install --upgrade pip
           pip install bandit
 
-      # ── Bandit: static code analysis ──────────────────────
-      - name: 🕵️ Bandit — static code security analysis
-        continue-on-error: true
+      - name: Bandit
         run: |
-          bandit -r . \
-            --exclude ./.venv,./venv,./env,./tests \
-            --severity-level medium \
-            --confidence-level medium \
-            -f json -o bandit-report.json || true
-          bandit -r . \
-            --exclude ./.venv,./venv,./env,./tests \
-            --severity-level medium \
-            --confidence-level medium
+          bandit -r . --exclude ./.venv,./venv,./env,./tests \
+          --severity-level medium --confidence-level medium || true
 
-      - name: 📋 Upload Bandit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-report
-          path: bandit-report.json
-
-      # ── pip-audit: dependency vulnerability check ────────────
-      - name: 🛡️ pip-audit — dependency vulnerability check
-        continue-on-error: true
+      - name: pip-audit
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pip-audit
-          pip-audit --format json -o pip-audit-report.json || true
-          pip-audit -r requirements.txt
+          pip-audit -r requirements.txt || true
 
-      - name: 📋 Upload pip-audit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pip-audit-report
-          path: pip-audit-report.json
-
-      # ── Trivy: filesystem scan (secrets + vulns) ───────────
-      - name: 🔍 Trivy — filesystem scan (secrets + vulns)
-        continue-on-error: true
+      - name: Trivy FS
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: .
-          format: table
-          output: trivy-fs-report.txt
-          exit-code: "1"
           severity: HIGH,CRITICAL
-          scanners: vuln,secret
-
-      - name: 📋 Upload Trivy filesystem report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-fs-report
-          path: trivy-fs-report.txt
+          exit-code: "1"
 
   # ────────────────────────────────────────────────────────────
-  # JOB 3 — Build Docker image, scan it, and push to GHCR
+  # JOB 3 — Docker Scan
   # ────────────────────────────────────────────────────────────
-  docker-build-scan-push:
-    name: 🐳 Docker Build, Scan & Push to GHCR
+  docker-scan:
+    name: 🐳 Docker Scan
     runs-on: ubuntu-latest
     needs: security
 
-    permissions:
-      actions: read
-      contents: read
-      packages: write         # required to push to GitHub Container Registry
-
     steps:
-      - name: ⬇️ Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🔑 Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: docker build -t crtd-backend-image:ci .
 
-      - name: 🔡 Set lowercase owner name
-        run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
-      - name: 🔨 Build Docker image
-        run: |
-          docker build -t backend-testing:ci \
-            -t ghcr.io/${{ env.OWNER }}/backend-testing:latest \
-            -t ghcr.io/${{ env.OWNER }}/backend-testing:${{ github.sha }} \
-            .
-
-      # ── Trivy: image scan (secrets + vulns) ───────────────
-      - name: 🔍 Trivy — scan Docker image (secrets + vulns)
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@master
         with:
           scan-type: image
-          image-ref: backend-testing:ci
-          format: table
-          output: trivy-image-report.txt
-          exit-code: "1"
+          image-ref: crtd-backend-image:ci
           severity: HIGH,CRITICAL
-          scanners: vuln,secret
+          exit-code: "1"
 
-      - name: 📋 Upload Trivy image report
-        if: always()
-        uses: actions/upload-artifact@v4
+  # ────────────────────────────────────────────────────────────
+  # JOB 4 — Deploy (ONLY for staging)
+  # ────────────────────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: docker-scan
+
+    # 🔥 IMPORTANT CONDITION
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+
+    steps:
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: trivy-image-report
-          path: trivy-image-report.txt
-
-      - name: 🚀 Push image to GitHub Container Registry
-        run: |
-          docker push ghcr.io/${{ env.OWNER }}/backend-testing:latest
-          docker push ghcr.io/${{ env.OWNER }}/backend-testing:${{ github.sha }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            sudo su - test-deploy << 'EOF'
+            set -e
+            cd app/crtd-backend/crtd-backend-v2
+            git pull origin staging
+            docker stop backend || true
+            docker rm -f backend || true
+            docker stop celery || true
+            docker rm -f celery || true
+            docker rmi -f backend || true
+            docker-compose up -d --build
+            docker image prune -f
+            sleep 5
+            curl -sI http://localhost:8000
+            EOF
