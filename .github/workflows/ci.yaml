@@ -149,6 +149,8 @@ jobs:
             git pull origin staging
             docker stop backend || true
             docker rm -f backend || true
+            docker stop celery || true
+            docker rm -f celery || true
             docker rmi -f backend || true
             docker-compose up -d --build
             docker image prune -f
