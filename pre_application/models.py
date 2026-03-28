@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.crypto import get_random_string
+from django.conf import settings
 # here is the model for pre-application form data, which will be stored in the database when a student submits the form.
 
 class PreApplication(models.Model):
@@ -44,6 +45,16 @@ class ReferalCode(models.Model):
     code = models.CharField(
         max_length=10,
         unique=True
+    )
+
+    #admin field to from the referalc code and the token info will be store in the code field and the status will be updated based on the user action in the referal code flow.
+
+    admin = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referral_codes',
+        null=True,
+        blank=True
     )
 
     status = models.CharField(

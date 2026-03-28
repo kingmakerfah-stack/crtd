@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import create_order, verify_payment, razorpay_webhook,payment_test_page
-from .views import PaymentHistoryListView
+from .views import create_order, verify_payment, razorpay_webhook,payment_test_page,PaymentHistoryListView
+
 
 urlpatterns = [
     #create order urls
