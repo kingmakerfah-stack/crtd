@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 
 class EnquiryTokenSequence(models.Model):
@@ -49,12 +50,36 @@ class PreApplication(models.Model):
 
 
 class ReferalCode(models.Model):
+    STATUS_NOT_USED = 'not_used'
+    STATUS_ACCOUNT_CREATED = 'account_created'
+    STATUS_MEMBERSHIP_PENDING = 'membership_pending'
+    STATUS_MEMBERSHIP_COMPLETED = 'membership_completed'
+
+    STATUS_CHOICES = [
+        (STATUS_NOT_USED, 'Account Not Created'),
+        (STATUS_ACCOUNT_CREATED, 'Account Created'),
+        (STATUS_MEMBERSHIP_PENDING, 'Membership Not Completed'),
+        (STATUS_MEMBERSHIP_COMPLETED, 'Membership Completed'),
+    ]
+
     student = models.OneToOneField(
         PreApplication,
         on_delete=models.CASCADE,
         related_name="referal_codes",
     )
     code = models.CharField(max_length=10, unique=True)
+    status = models.CharField(
+        max_length=25,
+        choices=STATUS_CHOICES,
+        default=STATUS_NOT_USED,
+    )
+    admin = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referral_codes',
+        null=True,
+        blank=True,
+    )
     is_used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

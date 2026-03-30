@@ -1,4 +1,4 @@
-from drf_yasg import openapi
+﻿from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
@@ -54,6 +54,7 @@ REFERRAL_CREATE_RESPONSE_EXAMPLE = {
     "id": 5,
     "student": 12,
     "code": "AB12CD34",
+    "status": "not_used",
     "is_used": False,
     "created_at": "2026-03-27T09:10:00Z",
     "message": "Referral code created and approval email sent",

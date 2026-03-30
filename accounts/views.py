@@ -143,7 +143,12 @@ class RegisterAPIView(APIView):
         referral = get_object_or_404(ReferalCode, code=reference_code)
 
         # 2️⃣ Validate referral
-        if referral.is_used:
+        # Prefer status as source of truth; keep is_used fallback for compatibility.
+        referral_already_used = (
+            referral.status != ReferalCode.STATUS_NOT_USED
+            or referral.is_used
+        )
+        if referral_already_used:
             return Response(
                 {"error": "Referral code already used."},
                 status=status.HTTP_400_BAD_REQUEST
@@ -213,8 +218,9 @@ class RegisterAPIView(APIView):
 
         pre_app.verified = True
         pre_app.save()
+        referral.status = ReferalCode.STATUS_ACCOUNT_CREATED
         referral.is_used = True
-        referral.save(update_fields=["is_used"])
+        referral.save(update_fields=["status", "is_used"])
 
         # With SQLite, creating the OTP record before this transaction  commits can
         # hit "database is locked". Queue the OTP workflow after commit instead.

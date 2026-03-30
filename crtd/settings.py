@@ -345,6 +345,8 @@ INSTALLED_APPS = [
     'Student',
     'pre_application',
     'admin_panel',
+    'admin_analytics',
+    'applications',
     'jobs.apps.JobsConfig',
     'payments',
     'subscription',
