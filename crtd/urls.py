@@ -21,7 +21,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/pre-application/', include('pre_application.urls')),
     path('api/student/', include('Student.urls')),
-    path('api/subscription/', include('subscription.urls')),
     # Swagger UI
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 
@@ -42,18 +41,6 @@ urlpatterns = [
     #Include payments routes
     path("payments/", include("payments.urls")), 
 
-    path('api/jobs/',include('jobs.urls')),
-
-    # Include admin panel routes
-    path('api/admin-panel/', include('admin_panel.urls')),
-
-    # Include admin analytics routes
-    path('api/admin-analytics/', include('admin_analytics.urls')),
-
-    #Include payments routes
-    path("api/payments/", include("payments.urls")), 
-
-    path("api/applications/",include("applications.urls"))
 ]
 
 if settings.DEBUG:
