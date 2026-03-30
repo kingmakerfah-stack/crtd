@@ -61,10 +61,12 @@ REFERRAL_CREATE_RESPONSE_EXAMPLE = {
 
 
 class PreApplicationCreateView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
         request_body=PreApplicationSerializer,
+        security=[],
         responses={
             201: openapi.Response(
                 description="Pre-application created successfully.",
@@ -118,7 +120,7 @@ class PreApplicationListAPIView(APIView):
                         "next": None,
                         "previous": None,
                         "results": [
-                            LOOKUP_RESPONSE_EXAMPLE,
+                            SUBMIT_RESPONSE_EXAMPLE,
                         ],
                     }
                 },
@@ -158,7 +160,7 @@ class PreApplicationByEnquiryTokenAPIView(APIView):
             200: openapi.Response(
                 description="Candidate details found for enquiry token.",
                 schema=PreApplicationLookupSerializer,
-                examples={"application/json": LOOKUP_RESPONSE_EXAMPLE},
+                examples={"application/json": SUBMIT_RESPONSE_EXAMPLE},
             ),
             401: "Authentication credentials were not provided.",
             403: "You do not have permission to perform this action.",
@@ -202,7 +204,7 @@ class PreApplicationLookupAPIView(APIView):
             200: openapi.Response(
                 description="Candidate details found.",
                 schema=PreApplicationLookupSerializer,
-                examples={"application/json": LOOKUP_RESPONSE_EXAMPLE},
+                examples={"application/json": SUBMIT_RESPONSE_EXAMPLE},
             ),
             400: "Provide exactly one of email or enquiry_token.",
             401: "Authentication credentials were not provided.",
@@ -325,9 +327,11 @@ class CreateReferralAPIView(BaseCreateReferralAPIView):
 
 
 class CheckReferralCodeAPIView(APIView):
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
+        security=[],
         tags=["Pre Application"],
         manual_parameters=[
             openapi.Parameter(
