@@ -17,4 +17,5 @@ celerybeat-schedule*
 *.pid
 docker-compose.yml
 Dockerfile
+.env
 
