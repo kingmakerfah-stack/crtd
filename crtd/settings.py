@@ -347,6 +347,7 @@ INSTALLED_APPS = [
     'admin_panel',
     'jobs.apps.JobsConfig',
     'payments',
+    'subscription',
 ]
 
 # -------------------------------------------------------
