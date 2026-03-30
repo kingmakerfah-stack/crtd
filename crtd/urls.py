@@ -38,6 +38,9 @@ urlpatterns = [
 
     # Include admin panel routes
     path('api/admin-panel/', include('admin_panel.urls')),
+    path('api/admin-analytics/', include('admin_analytics.urls')),
+    path('api/applications/', include('applications.urls')),
+    path('api/subscription/', include('subscription.urls')),
     #Include payments routes
     path("payments/", include("payments.urls")), 
 

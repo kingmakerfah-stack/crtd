@@ -77,8 +77,8 @@ class PreApplicationSerializer(serializers.ModelSerializer):
 class ReferalCodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReferalCode
-        fields = ["id", "student", "code", "is_used", "created_at"]
-        read_only_fields = ["student", "code", "is_used", "created_at"]
+        fields = ["id", "student", "code", "status", "is_used", "created_at"]
+        read_only_fields = ["student", "code", "status", "is_used", "created_at"]
 
 
 class PreApplicationLookupSerializer(serializers.ModelSerializer):

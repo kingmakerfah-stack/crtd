@@ -1,7 +1,15 @@
+import random
+import string
+import uuid
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
+
+
+def generate_transaction_id():
+    return "TXN" + "".join(random.choices(string.digits, k=10))
 
 
 class Payment(models.Model):
@@ -13,6 +21,12 @@ class Payment(models.Model):
     ]
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    plan = models.ForeignKey(
+        'subscription.SubscriptionPlan',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
 
     razorpay_order_id = models.CharField(max_length=255)
     razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True)
@@ -43,3 +57,42 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.user}"
+
+
+class PaymentHistory(models.Model):
+    PAYMENT_METHOD_CHOICES = [
+        ('card', 'Credit Card'),
+        ('upi', 'UPI'),
+        ('bank', 'Bank Transfer'),
+    ]
+
+    PAYMENT_STATUS_CHOICES = [
+        ('completed', 'Completed'),
+        ('pending', 'Pending'),
+        ('failed', 'Failed'),
+    ]
+
+    transaction_id = models.CharField(
+        max_length=20,
+        unique=True,
+        default=generate_transaction_id,
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=6, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default='pending',
+    )
+    razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True)
+    registration_date = models.DateTimeField(auto_now_add=True)
+    end_date = models.DateTimeField(blank=True, null=True)
+    membership_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    payment_details = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-registration_date']
+
+    def __str__(self):
+        return f"{self.transaction_id} - {self.user_id}"
