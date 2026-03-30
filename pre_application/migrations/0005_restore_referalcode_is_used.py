@@ -23,7 +23,7 @@ def add_is_used_column_if_missing(apps, schema_editor):
     quoted_table = schema_editor.quote_name(table_name)
     quoted_column = schema_editor.quote_name(column_name)
     schema_editor.execute(
-        f'ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} bool NOT NULL DEFAULT 0'
+        f'ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} bool NOT NULL DEFAULT FALSE'
     )
 
 
