@@ -1,4 +1,4 @@
-﻿"""
+"""
 Celery tasks for email service operations.
 
 This module contains all asynchronous email tasks that are executed

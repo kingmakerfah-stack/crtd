@@ -2,13 +2,14 @@
 <html>
 
 <head>
-    <title>CRTD Payment Test</title>
+    <title>CRTD Payment</title>
 </head>
 
 <body>
 
     <h2>CRTD Subscription</h2>
-    <button id="pay-btn">Pay Now</button>
+
+    <button id="pay-btn">Pay ₹500</button>
 
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
@@ -16,27 +17,17 @@
 
         document.getElementById("pay-btn").onclick = function () {
 
-            fetch("http://127.0.0.1:8000/api/payments/create-order/", {
+            fetch("http://127.0.0.1:8000/payments/create-order/", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 }
             })
-                .then(res => {
-                    if (!res.ok) {
-                        throw new Error("Create order failed");
-                    }
-                    return res.json();
-                })
+                .then(res => res.json())
                 .then(data => {
 
-                    console.log("Order Response:", data);
-
-                    // Update button text dynamically
-                    document.getElementById("pay-btn").innerText =
-                        "Pay ₹" + (data.amount / 100);
-
                     var options = {
+
                         key: data.key,
                         amount: data.amount,
                         currency: "INR",
@@ -47,49 +38,29 @@
 
                         handler: function (response) {
 
-                            console.log("Payment Success Response:", response);
-
-                            // Call verify API
-                            fetch("http://127.0.0.1:8000/api/payments/verify-payment/", {
+                            fetch("http://127.0.0.1:8000/payments/verify-payment/", {
                                 method: "POST",
                                 headers: {
                                     "Content-Type": "application/json"
                                 },
-                                body: JSON.stringify(response)({
-                                    razorpay_payment_id: response.razorpay_payment_id,
-                                    razorpay_order_id: response.razorpay_order_id,
-                                    razorpay_signature: response.razorpay_signature
-                                })
+                                body: JSON.stringify(response)
                             })
                                 .then(res => res.json())
                                 .then(data => {
-                                    console.log("Verify Response:", data);
-                                    alert("✅ Payment Successful & Verified!");
-                                })
-                                .catch(err => {
-                                    console.error("Verify Error:", err);
-                                    alert("❌ Verification Failed");
+                                    alert("Payment Successful");
+                                    console.log(data);
                                 });
 
-                        },
-
-                        modal: {
-                            ondismiss: function () {
-                                alert("❌ Payment Cancelled");
-                            }
                         }
+
                     };
 
                     var rzp = new Razorpay(options);
                     rzp.open();
 
-                })
-                .catch(error => {
-                    console.error("Error:", error);
-                    alert("❌ Something went wrong");
                 });
 
-        };
+        }
 
     </script>
 

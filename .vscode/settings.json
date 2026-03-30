@@ -1,10 +1,6 @@
 {
     "python.analysis.extraPaths": [
         "./crtd"
-<<<<<<< HEAD
-    ]
-=======
     ],
     "python.terminal.useEnvFile": true
->>>>>>> c703a367880c5fde76cca46daa7c66a68d5856be
 }
