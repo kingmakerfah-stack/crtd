@@ -87,6 +87,18 @@ class PreApplicationAPITests(APITestCase):
             second_response.data["enquiry_token"],
         )
 
+    def test_submit_form_succeeds_even_with_invalid_authorization_header(self):
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer invalid-token")
+
+        response = self.client.post(
+            reverse("pre-application-create"),
+            data=self.make_payload(email="invalid-header@example.com"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertRegex(response.data["enquiry_token"], r"^ENQ\d{6}$")
+
     def test_enquiry_lookup_returns_expected_basic_details_for_admin(self):
         pre_application = self.create_pre_application()
         ReferalCode.objects.create(student=pre_application, code="AB12CD34")
@@ -274,6 +286,18 @@ class PreApplicationAPITests(APITestCase):
         self.assertEqual(response.data["email"], pre_application.email)
         self.assertEqual(response.data["reference_code"], "ZXCV1234")
         self.assertEqual(response.data["enquiry_token"], pre_application.enquiry_token)
+
+    def test_referral_validation_ignores_invalid_authorization_header(self):
+        pre_application = self.create_pre_application(email="referral-header@example.com")
+        pre_application.verified = True
+        pre_application.save(update_fields=["verified"])
+        ReferalCode.objects.create(student=pre_application, code="QWER1234")
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer invalid-token")
+
+        response = self.client.get(reverse("check-referral", args=["QWER1234"]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["reference_code"], "QWER1234")
 
     def test_referral_generation_route_is_post_only(self):
         pre_application = self.create_pre_application()

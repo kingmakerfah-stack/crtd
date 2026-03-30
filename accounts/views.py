@@ -131,7 +131,8 @@ class RegisterAPIView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        reference_code = request.data.get("reference_code")
+        # Accept both snake_case and camelCase from clients, then normalize.
+        reference_code = request.data.get("reference_code") or request.data.get("referenceCode")
 
         if not reference_code:
             return Response(
@@ -160,7 +161,8 @@ class RegisterAPIView(APIView):
         data = {
             "email": request.data.get("email"),
             "password": request.data.get("password"),
-            "confirm_password": request.data.get("confirm_password"),
+            "confirm_password": request.data.get("confirm_password") or request.data.get("confirmPassword"),
+            "reference_code": reference_code,
             "role": "student"
         }
 
@@ -209,14 +211,20 @@ class RegisterAPIView(APIView):
             preferred_time=pre_app.preferred_time
         )
 
-        # Trigger universal OTP flow for student email verification.
-        from utils.email_service import EmailService
-        EmailService.send_verification_otp(user, purpose='email_verification')
-
         pre_app.verified = True
         pre_app.save()
         referral.is_used = True
         referral.save(update_fields=["is_used"])
+
+        # With SQLite, creating the OTP record before this transaction  commits can
+        # hit "database is locked". Queue the OTP workflow after commit instead.
+        from utils.email_service import EmailService
+        transaction.on_commit(
+            lambda: EmailService.send_verification_otp(
+                user,
+                purpose='email_verification',
+            )
+        )
 
         return Response(
             {
@@ -368,7 +376,7 @@ class OTPVerificationView(APIView):
     - otp: The OTP code (4-6 digits)
     
     Returns:
-    - JWT tokens if OTP is valid
+    - Success message if OTP is valid
     - Error message if OTP is invalid, expired, or doesn't match
     """
     permission_classes = [AllowAny]
@@ -406,14 +414,11 @@ class OTPVerificationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # For email_verification keep existing behavior: return tokens.
+        # For email_verification, only confirm verification.
         if purpose == 'email_verification':
-            refresh = RefreshToken.for_user(user)
             return Response(
                 {
                     "message": "Email verified successfully.",
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
                     "email": user.email,
                     "role": user.role
                 },
