@@ -8,10 +8,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# ✅ Use apk (Alpine package manager)
+RUN apk add --no-cache \
     gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+    musl-dev \
+    libpq-dev
 
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
@@ -26,21 +27,21 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+# ✅ Create non-root user (Alpine way)
+RUN addgroup -S appuser && adduser -S appuser -G appuser
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+# ✅ Install runtime deps
+RUN apk add --no-cache \
+    libpq
 
 COPY --from=builder /app/wheels /wheels
-RUN pip install --no-cache /wheels/* && rm -rf /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 COPY . /app/
 
-# Ensure staticfiles dir exists before collecting
 RUN mkdir -p /app/staticfiles
 
-# Pass enough env vars to satisfy settings.py at build time
+# Build-time env
 RUN SECRET_KEY="dummy_key_for_build" \
     DATABASE_URL="sqlite://:memory:" \
     python manage.py collectstatic --noinput
