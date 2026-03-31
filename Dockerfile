@@ -1,7 +1,7 @@
 # ==========================================
 # Stage 1: Builder
 # ==========================================
-FROM python:3.13-slim-bookworm AS builder
+FROM python:3.13-alpine AS builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.t
 # ==========================================
 # Stage 2: Production
 # ==========================================
-FROM python:3.13-slim-bookworm
+FROM python:3.13-alpine
 
 WORKDIR /app
 
