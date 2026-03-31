@@ -13,8 +13,8 @@ python manage.py migrate --noinput
 # 2. Start Celery worker in the background
 # (In an ideal enterprise microservice setup, you would run this as a separate container.
 #  But for simplicity, running it in the background here works perfectly fine.)
-echo "Starting Celery worker..."
-celery -A crtd worker -l info &
+# echo "Starting Celery worker..."
+# celery -A crtd worker -l info &
 
 # 3. Start the Django application using Gunicorn
 # Using exec ensures Gunicorn takes over PID 1, allowing it to handle Docker shutdown signals gracefully.
