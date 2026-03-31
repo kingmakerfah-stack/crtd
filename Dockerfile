@@ -17,6 +17,7 @@ RUN apk add --no-cache \
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
+
 # ==========================================
 # Stage 2: Production
 # ==========================================
@@ -30,9 +31,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # ✅ Create non-root user (Alpine way)
 RUN addgroup -S appuser && adduser -S appuser -G appuser
 
-# ✅ Install runtime deps
-RUN apk add --no-cache \
-    libpq
+# ✅ Install runtime deps + upgrade all packages to fix known CVEs
+RUN apk add --no-cache libpq \
+    && apk update \
+    && apk upgrade --no-cache
 
 COPY --from=builder /app/wheels /wheels
 RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
