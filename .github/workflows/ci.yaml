@@ -180,7 +180,7 @@ jobs:
             set -e
 
             echo ">>> Moving into project directory"
-            cd /app/crtd-backend-v2
+            cd app/crtd-backend-v2
 
             echo ">>> Pulling latest code from dev"
             git pull origin dev
