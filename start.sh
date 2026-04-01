@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/bin/sh
 set -e
-echo "Starting Production Setup..."
 
+echo "Starting Production Setup..."
 echo "Applying database migrations..."
 python manage.py migrate --noinput
 
