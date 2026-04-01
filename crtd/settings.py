@@ -369,6 +369,7 @@ INSTALLED_APPS = [
     'jobs.apps.JobsConfig',
     'payments',
     'subscription',
+    'django_celery_beat',
 ]
 
 # -------------------------------------------------------
