@@ -157,3 +157,59 @@ jobs:
             sleep 5
             curl -sI http://localhost:8000
             EOF
+
+  # ────────────────────────────────────────────────────────────
+  # JOB 5 — Deploy (ONLY for dev)
+  # ────────────────────────────────────────────────────────────
+  deploy-dev:
+    name: 🚀 Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: docker-scan
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+
+    steps:
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            sudo su - dev-deploy << 'EOF'
+            set -e
+
+            echo ">>> Moving into project directory"
+            cd app/crtd-backend-v2
+
+            echo ">>> Pulling latest code from dev"
+            git pull origin dev
+
+            echo ">>> Stopping and removing old containers"
+            docker stop dev-b  || true
+            docker rm -f dev-b || true
+            docker stop dev-c  || true
+            docker rm -f dev-c || true
+            docker stop dev-p  || true
+            docker rm -f dev-p || true
+            docker stop dev-r  || true
+            docker rm -f dev-r || true
+
+            echo ">>> Removing old backend image"
+            docker rmi -f dev-b || true
+
+            echo ">>> Rebuilding and starting via docker-compose"
+            docker-compose up -d --build
+
+            echo ">>> Pruning unused Docker images"
+            docker image prune -f
+
+            echo ">>> Waiting for container to be ready"
+            sleep 5
+
+            echo ">>> Health check"
+            curl -sI http://localhost:8000
+
+            echo ">>> Deployed successfully!"
+            docker ps | grep dev-b
+            EOF
