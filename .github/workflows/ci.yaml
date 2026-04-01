@@ -202,7 +202,7 @@ jobs:
             sleep 15
 
             echo ">>> Health check"
-            curl -sI http://localhost:8000
+            curl -sI http://localhost:5000
 
             echo ">>> Deployed successfully!"
             docker ps | grep dev-b
