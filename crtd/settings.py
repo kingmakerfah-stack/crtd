@@ -311,11 +311,30 @@ load_dotenv(ENV_FILE, encoding='utf-8-sig')
 # -------------------------------------------------------
 # SECURITY
 # -------------------------------------------------------
-SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-secret-key')
+APP_ENV = os.getenv('APP_ENV', 'local').lower()
+IS_LOCAL_ENV = APP_ENV in ('local', 'dev', 'development')
+
+SECRET_KEY = (os.getenv('SECRET_KEY') or '').strip()
+if not SECRET_KEY:
+    if IS_LOCAL_ENV:
+        SECRET_KEY = 'unsafe-secret-key'
+    else:
+        raise RuntimeError('SECRET_KEY is required in non-local environments.')
+
+if not IS_LOCAL_ENV and SECRET_KEY == 'unsafe-secret-key':
+    raise RuntimeError('Unsafe SECRET_KEY is not allowed in non-local environments.')
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+
+if not IS_LOCAL_ENV:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # -------------------------------------------------------
 # RAZORPAY CONFIG
@@ -491,6 +510,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '5/min',
+        'otp_request': '18/hour',
+        'otp_verify': '60/hour',
+        'password_reset': '18/hour',
+        'public_form_submit': '30/hour',
+    },
 }
 
 # -------------------------------------------------------
@@ -502,7 +531,6 @@ GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
 # -------------------------------------------------------
 # CELERY CONFIG
 # -------------------------------------------------------
-APP_ENV = os.getenv('APP_ENV', 'local').lower()
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = os.getenv('REDIS_PORT', '6379')
 REDIS_DB = os.getenv('REDIS_DB', '0')

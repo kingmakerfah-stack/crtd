@@ -5,6 +5,7 @@ from google.oauth2 import id_token as google_id_token
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
@@ -258,6 +259,8 @@ class LoginView(APIView):
     """
 
     permission_classes = [AllowAny]  # Anyone can attempt login
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
     @swagger_auto_schema(
     request_body=UserLoginSerializer,
     responses={
@@ -278,12 +281,7 @@ class LoginView(APIView):
         # Authenticate user using Django's authentication system
         user = authenticate(request, email=email, password=password)
 
-        if user is not None:
-            if not user.email_verified:
-                return Response(
-                    {"error": "Please verify your email first"},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        if user is not None and user.email_verified:
 
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -300,7 +298,7 @@ class LoginView(APIView):
             )
 
         return Response(
-            {"error": "Invalid email or password."},
+            {"error": "Invalid credentials or account state."},
             status=status.HTTP_401_UNAUTHORIZED
         )
 
@@ -335,6 +333,8 @@ class OTPRequestView(APIView):
           -d '{"email": "user@example.com"}'
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'otp_request'
 
     @swagger_auto_schema(
         request_body=OTPRequestSerializer,
@@ -352,22 +352,15 @@ class OTPRequestView(APIView):
         email = serializer.validated_data['email']
         purpose = serializer.validated_data['purpose']
         user = User.objects.filter(email=email).first()
-        if not user:
-            return Response(
-                {"error": "No user found with this email address."},
-                status=status.HTTP_400_BAD_REQUEST
+        if user:
+            EmailService.send_verification_otp(
+                user,
+                purpose=purpose,
             )
-
-        otp_code, otp_instance, email_task = EmailService.send_verification_otp(
-            user,
-            purpose=purpose,
-        )
 
         return Response(
             {
-                "message": "OTP has been sent to your email address.",
-                "email": email,
-                "email_task_id": email_task.id if email_task else None
+                "message": "If an account exists for this email, an OTP has been sent."
             },
             status=status.HTTP_200_OK
         )
@@ -386,6 +379,8 @@ class OTPVerificationView(APIView):
     - Error message if OTP is invalid, expired, or doesn't match
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'otp_verify'
 
     @swagger_auto_schema(
         request_body=OTPVerificationSerializer,
@@ -407,7 +402,7 @@ class OTPVerificationView(APIView):
         user = User.objects.filter(email=email).first()
         if not user:
             return Response(
-                {"error": "No user found with this email address."},
+                {"error": "Invalid or expired OTP."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -416,7 +411,7 @@ class OTPVerificationView(APIView):
 
         if not result['success']:
             return Response(
-                {"error": result['message']},
+                {"error": "Invalid or expired OTP."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -455,6 +450,8 @@ class PasswordResetView(APIView):
     sets the new password, then deletes the OTP record.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset'
 
     @swagger_auto_schema(
         request_body=PasswordResetSerializer,
@@ -475,7 +472,7 @@ class PasswordResetView(APIView):
         user = User.objects.filter(email=email).first()
         if not user:
             return Response(
-                {"error": "No user found with this email address."},
+                {"error": "Password reset request is invalid."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -488,7 +485,7 @@ class PasswordResetView(APIView):
             )
         except EmailOTP.DoesNotExist:
             return Response(
-                {"error": "OTP not verified. Please complete OTP verification first."},
+                {"error": "Password reset request is invalid."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -524,16 +521,10 @@ class AdminLoginView(APIView):
         password = serializer.validated_data['password']
 
         user = authenticate(request, email=email, password=password)
-        if user is None:
+        if user is None or user.role != 'subadmin':
             return Response(
-                {"error": "Invalid email or password."},
+                {"error": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        if user.role != 'subadmin':
-            return Response(
-                {"error": "Only a subadmin users are allowed."},
-                status=status.HTTP_403_FORBIDDEN
             )
 
         EmailService.send_verification_otp(user, purpose='login_otp', otp_length=6)
@@ -560,22 +551,16 @@ class AdminLoginVerifyOTPView(APIView):
         otp = serializer.validated_data['otp']
 
         user = User.objects.filter(email=email).first()
-        if not user:
+        if not user or user.role != 'subadmin':
             return Response(
-                {"error": "No user found with this email address."},
+                {"error": "Invalid credentials or verification code."},
                 status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if user.role !='subadmin':
-            return Response(
-                {"error": "Only a subadmin users are allowed."},
-                status=status.HTTP_403_FORBIDDEN
             )
 
         result = EmailService.verify_otp(user, otp, purpose='login_otp')
         if not result['success']:
             return Response(
-                {"error": result['message']},
+                {"error": "Invalid credentials or verification code."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
