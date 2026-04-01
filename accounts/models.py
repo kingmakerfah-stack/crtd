@@ -82,7 +82,7 @@ class EmailOTP(models.Model):
     )
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='email_otps')
-    otp = models.CharField(max_length=10)
+    otp = models.CharField(max_length=255) # Store hashed OTP
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_verified = models.BooleanField(default=False)
