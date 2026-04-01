@@ -199,7 +199,7 @@ jobs:
             docker image prune -f
 
             echo ">>> Waiting for container to be ready"
-            sleep 5
+            sleep 15
 
             echo ">>> Health check"
             curl -sI http://localhost:8000
