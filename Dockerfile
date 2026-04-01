@@ -1,46 +1,49 @@
 # ==========================================
 # Stage 1: Builder
 # ==========================================
-FROM python:3.13-slim AS builder
+FROM python:3.13-alpine AS builder
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# ✅ Use apk (Alpine package manager)
+RUN apk add --no-cache \
     gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+    musl-dev \
+    libpq-dev
 
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
+
 # ==========================================
 # Stage 2: Production
 # ==========================================
-FROM python:3.13-slim
+FROM python:3.13-alpine
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+# ✅ Create non-root user (Alpine way)
+RUN addgroup -S appuser && adduser -S appuser -G appuser
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+# ✅ Install runtime deps + upgrade all packages to fix known CVEs
+RUN apk add --no-cache libpq \
+    && apk update \
+    && apk upgrade --no-cache
 
 COPY --from=builder /app/wheels /wheels
-RUN pip install --no-cache /wheels/* && rm -rf /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 COPY . /app/
 
-# Ensure staticfiles dir exists before collecting
 RUN mkdir -p /app/staticfiles
 
-# Pass enough env vars to satisfy settings.py at build time
+# Build-time env
 RUN SECRET_KEY="dummy_key_for_build" \
     DATABASE_URL="sqlite://:memory:" \
     python manage.py collectstatic --noinput
