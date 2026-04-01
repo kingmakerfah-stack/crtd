@@ -146,7 +146,8 @@ jobs:
             sudo su - test-deploy << 'EOF'
             set -e
             cd app/crtd-backend/crtd-backend-v2
-            git pull origin staging
+            git fetch origin
+            git reset --hard origin/staging
             docker stop backend || true
             docker rm -f backend || true
             docker stop celery || true
@@ -183,7 +184,8 @@ jobs:
             cd app/crtd-backend-v2
 
             echo ">>> Pulling latest code from dev"
-            git pull origin dev
+            git fetch origin
+            git reset --hard origin/dev
 
             echo ">>> Stopping and removing old containers"
             docker stop dev-b  || true
