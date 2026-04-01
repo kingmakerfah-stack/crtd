@@ -1,6 +1,7 @@
 import secrets
 import string
 from django.conf import settings
+from django.contrib.auth.hashers import check_password, identify_hasher, make_password
 from django.utils import timezone
 from datetime import timedelta
 from utils.tasks import send_otp_email_task, send_approval_email_task, send_html_email_task
@@ -76,6 +77,15 @@ def generate_otp(length=4):
     if length == 1:
         return first_digit
     return first_digit + ''.join(secrets.choice(string.digits) for _ in range(length - 1))
+
+
+def _is_password_hash(value):
+    """Return True when value is a Django password-hash encoded string."""
+    try:
+        identify_hasher(value)
+        return True
+    except Exception:
+        return False
 
 
 class EmailService:
@@ -308,7 +318,7 @@ class EmailService:
             user=user,
             purpose=purpose,
             defaults={
-                'otp': otp_code,
+                'otp': make_password(otp_code),
                 'expires_at': timezone.now() + timedelta(minutes=expiration_minutes),
                 'is_verified': False,
             }
@@ -407,8 +417,13 @@ class EmailService:
         ):
             submitted_otp = submitted_otp.zfill(len(stored_otp))
 
-        # Check if OTP matches
-        if stored_otp != submitted_otp:
+        # New records store OTP hashed; allow plaintext fallback for legacy rows.
+        if _is_password_hash(stored_otp):
+            is_match = check_password(submitted_otp, stored_otp)
+        else:
+            is_match = stored_otp == submitted_otp
+
+        if not is_match:
             return {
                 'success': False,
                 'message': 'Invalid OTP. Please try again.'

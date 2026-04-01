@@ -67,13 +67,6 @@ class OTPRequestSerializer(serializers.Serializer):
         default='email_verification',
     )
 
-    def validate_email(self, value):
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError(
-                "No user found with this email address."
-            )
-        return value
-
 
 class OTPVerificationSerializer(serializers.Serializer):
     """Serializer for verifying OTP code."""
@@ -84,25 +77,11 @@ class OTPVerificationSerializer(serializers.Serializer):
         default='email_verification',
     )
 
-    def validate_email(self, value):
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError(
-                "No user found with this email address."
-            )
-        return value
-
 
 class PasswordResetSerializer(serializers.Serializer):
     """Serializer for resetting password after OTP has been verified."""
     email = serializers.EmailField()
     new_password = serializers.CharField(write_only=True, min_length=8)
-
-    def validate_email(self, value):
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError(
-                "No user found with this email address."
-            )
-        return value
 
 
 class UserLoginSerializer(serializers.Serializer):
