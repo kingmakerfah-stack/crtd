@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - dev
-      - staging
   pull_request:
     branches:
       - dev
@@ -153,7 +152,7 @@ jobs:
             docker rmi -f backend || true
             docker-compose up -d --build
             docker image prune -f
-            sleep 5
+            sleep 15
             curl -sI http://localhost:8000
             EOF
 
