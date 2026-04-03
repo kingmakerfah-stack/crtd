@@ -245,6 +245,8 @@ class RegisterAPIView(APIView):
 # LOGIN VIEW (JWT TOKEN GENERATION)
 # -------------------------------------------------------
 
+
+
 class LoginView(APIView):
     """
     Handles user login.
@@ -258,18 +260,19 @@ class LoginView(APIView):
     - Returns tokens + user role
     """
 
-    permission_classes = [AllowAny]  # Anyone can attempt login
+    permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'login'
+
     @swagger_auto_schema(
-    request_body=UserLoginSerializer,
-    responses={
-        200: "Login successful.",
-        401: "Invalid email or password.",
-        403: "Email not verified.",
-    },
-    tags=["Accounts"],
-    operation_description="Login user using email and password."
+        request_body=UserLoginSerializer,
+        responses={
+            200: "Login successful.",
+            401: "Invalid email or password.",
+            403: "Email not verified.",
+        },
+        tags=["Accounts"],
+        operation_description="Login user using email and password."
     )
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)
@@ -278,30 +281,36 @@ class LoginView(APIView):
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
 
-        # Authenticate user using Django's authentication system
+        # Authenticate user
         user = authenticate(request, email=email, password=password)
 
-        if user is not None and user.email_verified:
-
-            # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-
+        # ❌ Invalid credentials
+        if user is None:
             return Response(
-                {
-                    "message": "Login successful.",
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
-                    "email": user.email,
-                    "role": user.role
-                },
-                status=status.HTTP_200_OK
+                {"error": "Invalid email or password."},
+                status=status.HTTP_401_UNAUTHORIZED
             )
 
-        return Response(
-            {"error": "Invalid credentials or account state."},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+        # ❌ Email not verified
+        if not user.email_verified:
+            return Response(
+                {"error": "Email not verified."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
+        # ✅ Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+
+        return Response(
+            {
+                "message": "Login successful.",
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "email": user.email,
+                "role": user.role
+            },
+            status=status.HTTP_200_OK
+        )
 
 # -------------------------------------------------------
 # OTP VERIFICATION VIEWS
