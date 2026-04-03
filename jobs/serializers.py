@@ -6,11 +6,6 @@ class JobSerializer(serializers.ModelSerializer):
         model = Job
         fields = "__all__"
 
-    def validate_package(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Package must be greater than 0")
-        return value
-
     def validate_total_vacancies(self, value):
         if value < 1:
             raise serializers.ValidationError("Total vacancies must be at least 1")

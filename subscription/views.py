@@ -24,6 +24,7 @@ class SubscriptionPlanAPIView(APIView):
         return plan
 
     @swagger_auto_schema(
+        tags=["Subcription"],
         responses={200: SubscriptionPlanSerializer, 404: 'Subscription plan not found.'},
         operation_description='Return the active subscription plan. This endpoint is public.',
     )
@@ -32,6 +33,7 @@ class SubscriptionPlanAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
+        tags=["Subcription"],
         request_body=SubscriptionPlanSerializer,
         responses={201: SubscriptionPlanSerializer, 400: 'Validation error', 403: 'Admin access required.'},
         operation_description='Create the subscription plan. Admin only.',
@@ -43,6 +45,7 @@ class SubscriptionPlanAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @swagger_auto_schema(
+        tags=["Subcription"],
         request_body=SubscriptionPlanSerializer,
         responses={200: SubscriptionPlanSerializer, 400: 'Validation error', 403: 'Admin access required.', 404: 'Subscription plan not found.'},
         operation_description='Fully update the subscription plan. Admin only.',
@@ -55,6 +58,7 @@ class SubscriptionPlanAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
+        tags=["Subcription"],
         request_body=SubscriptionPlanSerializer,
         responses={200: SubscriptionPlanSerializer, 400: 'Validation error', 403: 'Admin access required.', 404: 'Subscription plan not found.'},
         operation_description='Partially update the subscription plan. Admin only.',
@@ -67,6 +71,7 @@ class SubscriptionPlanAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
+        tags=["Subcription"],
         responses={204: 'Subscription plan deleted.', 403: 'Admin access required.', 404: 'Subscription plan not found.'},
         operation_description='Delete the subscription plan. Admin only.',
     )

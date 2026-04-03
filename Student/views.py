@@ -9,7 +9,7 @@ from rest_framework import status
 from accounts.permissions import IsStudent
 from rest_framework.exceptions import ValidationError
 from drf_yasg.utils import swagger_auto_schema
-
+from .utils import update_profile_status
 # user id to student root model.
 def student_id(id):
     return Student.objects.get(user=id) 
@@ -84,7 +84,7 @@ class StudentPersonalDetails(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
+        update_profile_status(personal_detail.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     # 🟢 PARTIAL UPDATE
@@ -115,7 +115,7 @@ class StudentPersonalDetails(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
+        update_profile_status(personal_detail.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 
@@ -155,7 +155,7 @@ class StudentEducationView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
+        update_profile_status(education.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
@@ -184,7 +184,7 @@ class StudentEducationView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
+        update_profile_status(education.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 class StudentCareerPreferenceView(APIView):
@@ -222,7 +222,7 @@ class StudentCareerPreferenceView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
+        update_profile_status(career.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @swagger_auto_schema(
@@ -251,5 +251,5 @@ class StudentCareerPreferenceView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-
+        update_profile_status(career.student)
         return Response(serializer.data, status=status.HTTP_200_OK)

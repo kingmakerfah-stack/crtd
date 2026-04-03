@@ -6,7 +6,7 @@ class Job(models.Model):
         ("On-site", "On-site"),
     ]
     job_role = models.CharField(max_length=255)
-    package = models.DecimalField(max_digits=10, decimal_places=2)
+    package = models.CharField(max_length=20)
     department = models.CharField(max_length=255)
     total_vacancies = models.PositiveIntegerField()
     experience = models.CharField(max_length=100)

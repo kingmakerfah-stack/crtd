@@ -21,7 +21,7 @@ from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer,
 class EnquiryAnalyticsView(APIView):
 
     permission_classes = [IsAuthenticated,IsAdminRole]
-    @swagger_auto_schema(security=[{"Bearer": []}])
+    @swagger_auto_schema(security=[{"Bearer": []}],tags=["Admin Analytics"])
     def get(self, request):
 
         analytics = PreApplication.objects.aggregate(
@@ -52,7 +52,7 @@ class EnquiryAnalyticsView(APIView):
 class EnquiryTableView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
-
+    @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
         enquiries = PreApplication.objects.all()
@@ -76,7 +76,7 @@ class EnquiryTableView(APIView):
 class ReferenceCodeStatusView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
-
+    @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
         total_reference_code = ReferalCode.objects.count()
@@ -119,7 +119,8 @@ class UpdateReferenceStatusView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
 
-    @swagger_auto_schema(request_body=UpdateReferenceStatusSerializer)
+    @swagger_auto_schema(request_body=UpdateReferenceStatusSerializer,
+                         tags=["Admin Analytics"])
     def patch(self, request, pk):
 
         try:
@@ -141,7 +142,7 @@ class UpdateReferenceStatusView(APIView):
 class DeleteReferenceCodeView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
-
+    @swagger_auto_schema(tags=["Admin Analytics"])
     def delete(self, request, pk):
 
         try:
@@ -157,7 +158,7 @@ class DeleteReferenceCodeView(APIView):
 class PaymentAnalyticsView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
-
+    @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
         today = now().date()
@@ -245,7 +246,8 @@ class CreateTestimonialView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
 
-    @swagger_auto_schema(request_body=TestimonialSerializer)
+    @swagger_auto_schema(request_body=TestimonialSerializer,
+                         tags=["Admin Analytics"])
     def post(self, request):
 
         serializer = TestimonialSerializer(data=request.data)
@@ -263,7 +265,7 @@ class CreateTestimonialView(APIView):
 class TestimonialListView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
-
+    @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
         queryset = Testimonial.objects.all().order_by("-created_at")
@@ -279,7 +281,8 @@ class UpdateTestimonialView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
 
-    @swagger_auto_schema(request_body=TestimonialSerializer)
+    @swagger_auto_schema(request_body=TestimonialSerializer,
+                         tags=["Admin Analytics"])
     def patch(self, request, pk):
 
         try:
@@ -308,7 +311,7 @@ class UpdateTestimonialView(APIView):
 class DeleteTestimonialView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
-
+    @swagger_auto_schema(tags=["Admin Analytics"])
     def delete(self, request, pk):
 
         try:
@@ -328,6 +331,7 @@ class UpdateCompanyPartnersView(APIView):
     permission_classes =[IsAuthenticated,IsAdminRole]
     
     @swagger_auto_schema(
+        tags=["Admin Analytics"],
         request_body=CompanyPartnersSerializer,
         operation_description = """ Update the total number of company partners.
         No ID is required for this endpoint."""
@@ -344,6 +348,7 @@ class UpdateCompanyPartnersView(APIView):
 class CollaborationAnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated,IsAdminRole]
     @swagger_auto_schema(
+            tags=["Admin Analytics"],
             operation_description="Returns total company partners, job openings, and testimonials count"
     )
     def get(self,request):

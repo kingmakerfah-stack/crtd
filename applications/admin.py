@@ -1,3 +1,4 @@
+
 from django.contrib import admin
 from .models import Application,CoolDown
 
@@ -15,7 +16,9 @@ class ApplicationAdmin(admin.ModelAdmin):
         'experience',
         'skills',
         'status',
-        'applied_at'
+        'applied_at',
+        'cooldown_days_used',
+        'reason'
     )
 
     list_filter = (
