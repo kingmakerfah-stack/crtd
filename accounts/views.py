@@ -46,6 +46,9 @@ class GoogleAuthView(APIView):
 
         token_value = serializer.validated_data["id_token"]
         role = serializer.validated_data.get("role")
+        referral_code = serializer.validated_data.get("referral_code")
+        referral = None
+        pre_app = None
 
         if not settings.GOOGLE_OAUTH_CLIENT_ID:
             return Response(
@@ -76,6 +79,45 @@ class GoogleAuthView(APIView):
 
         user = User.objects.filter(email=email).first()
 
+        # First-time Google signup must be tied to an existing pre-application.
+        if not user and not referral_code:
+            return Response(
+                {"detail": "referral_code is required for first-time Google signup."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # If a referral code is supplied, enforce that the Google email matches
+        # the pre-application email and that the referral is still valid.
+        if referral_code:
+            referral = get_object_or_404(ReferalCode.objects.select_related("student"), code=referral_code)
+
+            if referral.status != "not_used":
+                return Response(
+                    {"detail": "Referral code already used."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            pre_app = referral.student
+            if not pre_app.verified:
+                return Response(
+                    {"detail": "Pre-application not verified yet."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if pre_app.email.lower() != email.lower():
+                return Response(
+                    {"detail": "Use the same Google account as the referral email."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Force role to student for referral-based signup
+            if role and role != "student":
+                return Response(
+                    {"detail": "Role must be student for referral signup."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            role = "student"
+
         if not user and not role:
             return Response(
                 {"detail": "Role is required for first-time Google login."},
@@ -88,6 +130,7 @@ class GoogleAuthView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        created_user = False
         if not user:
             user = User.objects.create_user(
                 email=email,
@@ -95,7 +138,49 @@ class GoogleAuthView(APIView):
                 role=role,
             )
             user.set_unusable_password()
-            user.save(update_fields=["password"])
+            user.email_verified = True  # Google email is verified
+            user.save(update_fields=["password", "email_verified"])
+            created_user = True
+
+        # If this is a referral-based signup and the student profile does not exist yet,
+        # create it from the pre-application data.
+        if referral and pre_app:
+            student = getattr(user, "student_profile", None)
+            if not student:
+                student = Student.objects.create(
+                    user=user,
+                    enrollment_id=f"ENR-{pre_app.id}"
+                )
+
+                StudentPersonalDetail.objects.create(
+                    student=student,
+                    first_name=pre_app.first_name,
+                    last_name=pre_app.last_name,
+                    email=pre_app.email,
+                    whatsapp_no=pre_app.whatsapp_no,
+                    alternate_phone=pre_app.alternate_phone,
+                    birthplace_state=pre_app.birthplace_state
+                )
+
+                StudentEducation.objects.create(
+                    student=student,
+                    qualification=pre_app.qualification,
+                    specialization=pre_app.specialization,
+                    college_name=pre_app.college_name,
+                    college_state=pre_app.college_state,
+                    passing_year=pre_app.passing_year
+                )
+
+                StudentCareerPreference.objects.create(
+                    student=student,
+                    preferred_time=pre_app.preferred_time
+                )
+
+            # Mark referral as consumed
+            if referral.status == "not_used":
+                referral.status = "account_created"
+                referral.is_used = True
+                referral.save(update_fields=["status", "is_used"])
 
         refresh = RefreshToken.for_user(user)
 
