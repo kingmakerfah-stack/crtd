@@ -71,15 +71,15 @@ class AuthResponseNormalizationTests(APITestCase):
 			email_verified=False,
 		)
 
-	def test_login_unverified_user_returns_generic_401(self):
+	def test_login_unverified_user_returns_generic_403(self):
 		response = self.client.post(
 			reverse('token_obtain_pair'),
 			{'email': self.user.email, 'password': 'SecurePass@123'},
 			format='json',
 		)
 
-		self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-		self.assertEqual(response.data['error'], 'Invalid credentials or account state.')
+		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+		self.assertEqual(response.data['error'], 'Email not verified.')
 
 	def test_otp_request_unknown_email_returns_generic_success(self):
 		response = self.client.post(

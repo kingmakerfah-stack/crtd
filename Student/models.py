@@ -13,6 +13,9 @@ class Student(models.Model):
 
     enrollment_id = models.CharField(max_length=20, unique=True, null=True, blank=True)
 
+    # ✅ FIX: Added missing profile_completed field (was in serializer but not in model)
+    profile_completed = models.BooleanField(default=False)
+
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
@@ -20,7 +23,8 @@ class Student(models.Model):
 
     def __str__(self):
         return str(self.user.email) if self.user else "Student"
-    
+
+
 class StudentPersonalDetail(models.Model):
     student = models.OneToOneField(
         Student,

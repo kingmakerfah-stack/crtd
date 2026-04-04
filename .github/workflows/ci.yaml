@@ -8,7 +8,6 @@ on:
   pull_request:
     branches:
       - dev
-      - staging
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -146,16 +145,15 @@ jobs:
             sudo su - test-deploy << 'EOF'
             set -e
             cd app/crtd-backend/crtd-backend-v2
-            git pull origin staging
-            docker stop backend || true
-            docker rm -f backend || true
-            docker stop celery || true
-            docker rm -f celery || true
+            git fetch origin
+            git reset --hard origin/staging
+            docker stop backend celery celery-beat || true
+            docker rm -f backend celery celery-beat || true
             docker rmi -f backend || true
             docker-compose up -d --build
             docker image prune -f
-            sleep 5
-            curl -sI http://localhost:8000
+            sleep 15
+            curl -sI http://localhost/api
             EOF
 
   # ────────────────────────────────────────────────────────────
@@ -183,17 +181,12 @@ jobs:
             cd app/crtd-backend-v2
 
             echo ">>> Pulling latest code from dev"
-            git pull origin dev
+            git fetch origin
+            git reset --hard origin/dev
 
             echo ">>> Stopping and removing old containers"
-            docker stop dev-b  || true
-            docker rm -f dev-b || true
-            docker stop dev-c  || true
-            docker rm -f dev-c || true
-            docker stop dev-p  || true
-            docker rm -f dev-p || true
-            docker stop dev-r  || true
-            docker rm -f dev-r || true
+            docker stop dev-b dev-c dev-cb || true
+            docker rm -f dev-b dev-c dev-cb || true
 
             echo ">>> Removing old backend image"
             docker rmi -f dev-b || true
@@ -205,10 +198,10 @@ jobs:
             docker image prune -f
 
             echo ">>> Waiting for container to be ready"
-            sleep 5
+            sleep 15
 
             echo ">>> Health check"
-            curl -sI http://localhost:8000
+            curl -sI http://localhost:5000
 
             echo ">>> Deployed successfully!"
             docker ps | grep dev-b
