@@ -7,12 +7,13 @@ from .models import CustomUser
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
 
-    list_display = ('email', 'role', 'is_staff', 'is_active')
+    list_display = ('email', 'role', 'email_verified', 'is_staff', 'is_active')
     ordering = ('email',)
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Role', {'fields': ('role',)}),
+        ('Verification', {'fields': ('email_verified',)}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
         }),
@@ -21,7 +22,15 @@ class CustomUserAdmin(UserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'role', 'password1', 'password2', 'is_staff', 'is_superuser'),
+            'fields': (
+                'email',
+                'role',
+                'email_verified',   # 👈 added here
+                'password1',
+                'password2',
+                'is_staff',
+                'is_superuser'
+            ),
         }),
     )
 
