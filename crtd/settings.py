@@ -324,7 +324,7 @@ if not SECRET_KEY:
 if not IS_LOCAL_ENV and SECRET_KEY == 'unsafe-secret-key':
     raise RuntimeError('Unsafe SECRET_KEY is not allowed in non-local environments.')
 
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
