@@ -79,7 +79,7 @@ class AuthResponseNormalizationTests(APITestCase):
 		)
 
 		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-		self.assertEqual(response.data['error'], 'Invalid credentials or account state.')
+		self.assertEqual(response.data['error'], 'Email not verified.')
 
 	def test_otp_request_unknown_email_returns_generic_success(self):
 		response = self.client.post(
