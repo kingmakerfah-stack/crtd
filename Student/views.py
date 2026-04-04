@@ -36,6 +36,7 @@ class StudentDataView(APIView):
     permission_classes = [IsStudent]
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         responses={
             200: "Student profile retrieved successfully.",
             401: "Authentication credentials were not provided.",
@@ -82,6 +83,7 @@ class StudentPersonalDetails(APIView):
             raise NotFound("Personal details not found.")
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentPersonalDetailSerializer,
         responses={
             201: StudentPersonalDetailSerializer,
@@ -100,6 +102,7 @@ class StudentPersonalDetails(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentPersonalDetailSerializer,
         responses={
             200: StudentPersonalDetailSerializer,
@@ -120,6 +123,7 @@ class StudentPersonalDetails(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentPersonalDetailSerializer,
         responses={
             200: StudentPersonalDetailSerializer,
@@ -155,6 +159,7 @@ class StudentEducationView(APIView):
             raise NotFound("Education details not found.")
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentEducationSerializer,
         responses={
             201: StudentEducationSerializer,
@@ -173,6 +178,7 @@ class StudentEducationView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentEducationSerializer,
         responses={
             200: StudentEducationSerializer,
@@ -193,6 +199,7 @@ class StudentEducationView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentEducationSerializer,
         responses={
             200: StudentEducationSerializer,
@@ -228,6 +235,7 @@ class StudentCareerPreferenceView(APIView):
             raise NotFound("Career preference not found.")
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentCareerPreferenceSerializer,
         responses={
             201: StudentCareerPreferenceSerializer,
@@ -246,6 +254,7 @@ class StudentCareerPreferenceView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentCareerPreferenceSerializer,
         responses={
             200: StudentCareerPreferenceSerializer,
@@ -266,6 +275,7 @@ class StudentCareerPreferenceView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
+        security=[{"Bearer": []}],
         request_body=StudentCareerPreferenceSerializer,
         responses={
             200: StudentCareerPreferenceSerializer,
