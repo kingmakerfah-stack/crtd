@@ -41,7 +41,7 @@ class ApplyJobView(APIView):
         user = request.user
         student = getattr(user, "student_profile", None)
 
-        if student and not student.is_profile_complete:
+        if student and not student.profile_completed:
             return Response({
                 "message": "Please complete your profile before applying"
             }, status=status.HTTP_400_BAD_REQUEST)
