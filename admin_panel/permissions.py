@@ -2,7 +2,7 @@ from rest_framework.permissions import BasePermission
 
 
 class IsSuperuserOrAdminOrSubadmin(BasePermission):
-    """Allow access to superuser, admin/subadmin roles, and staff users."""
+    """Allow access to Django superusers/staff and admin-portal roles only."""
 
     message = "You do not have permission to perform this action."
 
@@ -18,4 +18,4 @@ class IsSuperuserOrAdminOrSubadmin(BasePermission):
         if getattr(user, "is_staff", False):
             return True
 
-        return getattr(user, "role", None) in {"admin", "subadmin"}
+        return getattr(user, "role", None) in {"superadmin", "subadmin", "sales"}
