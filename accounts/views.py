@@ -26,6 +26,8 @@ from rest_framework.generics import get_object_or_404
 from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
 from django.db import transaction
 
+from utils.email_service import EmailService
+
 
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
@@ -225,7 +227,6 @@ class RegisterAPIView(APIView):
 
         # With SQLite, creating the OTP record before this transaction  commits can
         # hit "database is locked". Queue the OTP workflow after commit instead.
-        from utils.email_service import EmailService
         transaction.on_commit(
             lambda: EmailService.send_verification_otp(
                 user,

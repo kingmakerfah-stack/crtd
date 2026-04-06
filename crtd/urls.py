@@ -42,7 +42,7 @@ urlpatterns = [
     path('api/applications/', include('applications.urls')),
     path('api/subscription/', include('subscription.urls')),
     #Include payments routes
-    path("payments/", include("payments.urls")), 
+    path("api/payments/", include("payments.urls")), 
 
 ]
 
