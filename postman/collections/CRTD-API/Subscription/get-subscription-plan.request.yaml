@@ -1,0 +1,9 @@
+$kind: http-request
+name: 'Get/Update Subscription Plan'
+method: GET
+url: '{{baseUrl}}/api/subscription/plan/'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Get the current subscription plan.

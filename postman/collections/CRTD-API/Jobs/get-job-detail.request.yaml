@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Job Detail
+method: GET
+url: '{{baseUrl}}/api/jobs/{{jobId}}/'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Retrieve a specific job by ID.

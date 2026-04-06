@@ -1,0 +1,9 @@
+$kind: http-request
+name: Apply for Job
+method: POST
+url: '{{baseUrl}}/api/applications/apply-job/{{jobId}}/'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Apply for a specific job by ID.

@@ -1,0 +1,21 @@
+$kind: http-request
+name: Update Education (Full)
+method: PUT
+url: '{{baseUrl}}/api/student/profile/education/'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "qualification": "B.Tech",
+      "specialization": "Computer Science",
+      "college_name": "ABC College",
+      "college_state": "Maharashtra",
+      "passing_year": 2023
+    }
+description: Fully update the authenticated student's education details.

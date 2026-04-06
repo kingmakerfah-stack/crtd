@@ -1,0 +1,9 @@
+$kind: http-request
+name: List Testimonials
+method: GET
+url: '{{baseUrl}}/api/admin-analytics/testimonials/'
+order: 7000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: List all testimonials.

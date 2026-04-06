@@ -1,0 +1,16 @@
+$kind: http-request
+name: Google Auth
+method: POST
+url: '{{baseUrl}}/api/accounts/google/'
+order: 4000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "id_token": "{{googleIdToken}}",
+      "role": "student"
+    }
+description: Authenticate using Google ID token.

@@ -1,0 +1,9 @@
+$kind: http-request
+name: List Jobs
+method: GET
+url: '{{baseUrl}}/api/jobs/'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: List all jobs.

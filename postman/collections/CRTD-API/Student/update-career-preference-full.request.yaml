@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Career Preference (Full)
+method: PUT
+url: '{{baseUrl}}/api/student/profile/career/'
+order: 9000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "preferred_time": "evening"
+    }
+description: Fully update the authenticated student's career preference.

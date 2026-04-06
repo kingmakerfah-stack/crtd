@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Company Partners
+method: PUT
+url: '{{baseUrl}}/api/admin-analytics/company-partners/update/'
+order: 11000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "partners": ["Company A", "Company B"]
+    }
+description: Update the list of company partners.

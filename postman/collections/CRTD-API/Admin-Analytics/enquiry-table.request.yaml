@@ -1,0 +1,9 @@
+$kind: http-request
+name: Enquiry Table
+method: GET
+url: '{{baseUrl}}/api/admin-analytics/enquiry-table/'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Get enquiry data in table format.

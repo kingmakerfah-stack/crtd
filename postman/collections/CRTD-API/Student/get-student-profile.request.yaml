@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Student Profile
+method: GET
+url: '{{baseUrl}}/api/student/profile/'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Returns complete student profile including personal details, education, and career preference.

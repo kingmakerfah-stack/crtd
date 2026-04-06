@@ -1,0 +1,9 @@
+$kind: http-request
+name: Create Referral
+method: POST
+url: '{{baseUrl}}/api/pre-application/referral/create/{{preApplicationId}}/'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Create a referral code for a pre-application by ID.

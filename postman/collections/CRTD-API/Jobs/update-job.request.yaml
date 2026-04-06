@@ -1,0 +1,20 @@
+$kind: http-request
+name: Update Job
+method: PUT
+url: '{{baseUrl}}/api/jobs/{{jobId}}/'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "Senior Software Engineer",
+      "description": "Updated description",
+      "location": "Remote",
+      "salary": "70000"
+    }
+description: Fully update a job listing.

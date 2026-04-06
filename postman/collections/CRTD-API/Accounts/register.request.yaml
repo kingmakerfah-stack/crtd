@@ -1,0 +1,18 @@
+$kind: http-request
+name: Register
+method: POST
+url: '{{baseUrl}}/api/accounts/register/'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "user@example.com",
+      "password": "password123",
+      "confirm_password": "password123",
+      "reference_code": "{{referenceCode}}"
+    }
+description: Register a student account after referral validation. reference_code is required.

@@ -1,0 +1,16 @@
+$kind: http-request
+name: Request OTP
+method: POST
+url: '{{baseUrl}}/api/accounts/otp/request/'
+order: 5000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "user@example.com",
+      "purpose": "email_verification"
+    }
+description: Send OTP for email_verification, password_reset, or login_otp.
