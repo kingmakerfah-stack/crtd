@@ -32,6 +32,7 @@ urlpatterns = [
     
     # Include accounts authentication routes
     path('api/accounts/', include('accounts.urls')),
+    path('api/admin/', include('accounts.admin_urls')),
 
 
     path('api/jobs/',include('jobs.urls')),

@@ -297,6 +297,7 @@
 # }
 from pathlib import Path
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
 
@@ -324,7 +325,10 @@ if not SECRET_KEY:
 if not IS_LOCAL_ENV and SECRET_KEY == 'unsafe-secret-key':
     raise RuntimeError('Unsafe SECRET_KEY is not allowed in non-local environments.')
 
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = os.getenv(
+    'DEBUG',
+    'true' if IS_LOCAL_ENV else 'false'
+).strip().lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
@@ -460,7 +464,7 @@ USE_TZ = True
 # -------------------------------------------------------
 # STATIC FILES
 # -------------------------------------------------------
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # -------------------------------------------------------
@@ -505,8 +509,7 @@ DEFAULT_FROM_EMAIL = os.getenv(
 # -------------------------------------------------------
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        'accounts.authentication.SessionAwareJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -612,3 +615,33 @@ SWAGGER_SETTINGS = {
         }
     },
 }
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+USE_REDIS_CACHE = os.getenv(
+    'USE_REDIS_CACHE',
+    'false' if IS_LOCAL_ENV else 'true',
+).strip().lower() == 'true'
+
+if USE_REDIS_CACHE:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.getenv('REDIS_CACHE_URL', 'redis://localhost:6379/1'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'KEY_PREFIX': 'crtd',
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'crtd-local-cache',
+        }
+    }
