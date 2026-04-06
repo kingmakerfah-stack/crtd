@@ -13,8 +13,13 @@ class PreApplicationAdmin(admin.ModelAdmin):
         "last_name",
         "email",
         "whatsapp_no",
+        "status",
         "verified",
+        "is_deleted",
+        "deleted_at",
+        "deleted_by",
     )
+    list_filter = ("is_deleted", "status", "verified", "deleted_at")
     search_fields = ("enquiry_token", "first_name", "last_name", "email")
     actions = ["generate_referral_codes"]
 

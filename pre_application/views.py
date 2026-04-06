@@ -1,18 +1,23 @@
 ﻿from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from admin_panel.permissions import IsSuperuserOrAdminOrSubadmin
+from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 
 from .models import PreApplication, ReferalCode
 from .pagination import PreApplicationPagination
 from .serializers import (
+    PreApplicationActionResponseSerializer,
+    PreApplicationAdminListSerializer,
+    PreApplicationArchiveRequestSerializer,
     PreApplicationLookupSerializer,
     PreApplicationSerializer,
+    PreApplicationStatusUpdateSerializer,
     ReferalCodeSerializer,
     ReferralValidationResponseSerializer,
 )
@@ -33,7 +38,12 @@ SUBMIT_RESPONSE_EXAMPLE = {
     "college_state": "Gujarat",
     "passing_year": "2024",
     "preferred_time": "Evening",
+    "status": "pending",
     "verified": False,
+    "is_deleted": False,
+    "deleted_at": None,
+    "deleted_reason": None,
+    "deleted_by": None,
     "created_at": "2026-03-27T09:00:00Z",
 }
 
@@ -50,6 +60,11 @@ LOOKUP_RESPONSE_EXAMPLE = {
     "reference_code": "AB12CD34",
 }
 
+STATUS_UPDATE_RESPONSE_EXAMPLE = {
+    **SUBMIT_RESPONSE_EXAMPLE,
+    "status": "completed",
+}
+
 REFERRAL_CREATE_RESPONSE_EXAMPLE = {
     "id": 5,
     "student": 12,
@@ -59,6 +74,33 @@ REFERRAL_CREATE_RESPONSE_EXAMPLE = {
     "created_at": "2026-03-27T09:10:00Z",
     "message": "Referral code created and approval email sent",
 }
+
+ARCHIVE_RESPONSE_EXAMPLE = {
+    "message": "Pre-application archived successfully.",
+    "enquiry_token": "ENQ000123",
+    "is_deleted": True,
+}
+
+RESTORE_RESPONSE_EXAMPLE = {
+    "message": "Pre-application restored successfully.",
+    "enquiry_token": "ENQ000123",
+    "is_deleted": False,
+}
+
+
+def _is_superadmin_user(user):
+    return getattr(user, "is_superuser", False) or getattr(user, "role", None) == "superadmin"
+
+
+def _include_deleted_requested(request):
+    return (request.query_params.get("include_deleted") or "").strip().lower() == "true"
+
+
+def _filtered_preapplication_queryset(request):
+    queryset = PreApplication.objects.select_related("referal_codes").order_by("-created_at")
+    if _include_deleted_requested(request) and _is_superadmin_user(request.user):
+        return queryset
+    return queryset.filter(is_deleted=False)
 
 
 class PreApplicationCreateView(APIView):
@@ -90,7 +132,8 @@ class PreApplicationCreateView(APIView):
 
 
 class PreApplicationListAPIView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
     pagination_class = PreApplicationPagination
 
     @swagger_auto_schema(
@@ -109,6 +152,13 @@ class PreApplicationListAPIView(APIView):
                 openapi.IN_QUERY,
                 description="Items per page",
                 type=openapi.TYPE_INTEGER,
+                required=False,
+            ),
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Set true to include archived rows (superadmin only).",
+                type=openapi.TYPE_BOOLEAN,
                 required=False,
             ),
         ],
@@ -135,15 +185,16 @@ class PreApplicationListAPIView(APIView):
         ),
     )
     def get(self, request):
-        queryset = PreApplication.objects.select_related("referal_codes").order_by("-created_at")
+        queryset = _filtered_preapplication_queryset(request)
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request, view=self)
-        serializer = PreApplicationLookupSerializer(page, many=True)
+        serializer = PreApplicationAdminListSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 
 class PreApplicationByEnquiryTokenAPIView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
 
     @swagger_auto_schema(
         security=[{"Bearer": []}],
@@ -155,7 +206,14 @@ class PreApplicationByEnquiryTokenAPIView(APIView):
                 description="Enquiry token in ENQ123456 format",
                 type=openapi.TYPE_STRING,
                 required=True,
-            )
+            ),
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Set true to include archived rows (superadmin only).",
+                type=openapi.TYPE_BOOLEAN,
+                required=False,
+            ),
         ],
         responses={
             200: openapi.Response(
@@ -172,15 +230,68 @@ class PreApplicationByEnquiryTokenAPIView(APIView):
     def get(self, request, enquiry_token):
         token = enquiry_token.strip().upper()
         pre_application = get_object_or_404(
-            PreApplication.objects.select_related("referal_codes"),
+            _filtered_preapplication_queryset(request),
             enquiry_token=token,
         )
         serializer = PreApplicationLookupSerializer(pre_application)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        request_body=PreApplicationStatusUpdateSerializer,
+        manual_parameters=[
+            openapi.Parameter(
+                "enquiry_token",
+                openapi.IN_PATH,
+                description="Enquiry token in ENQ123456 format",
+                type=openapi.TYPE_STRING,
+                required=True,
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Pre-application status updated successfully.",
+                schema=PreApplicationSerializer,
+                examples={"application/json": STATUS_UPDATE_RESPONSE_EXAMPLE},
+            ),
+            400: "Validation error",
+            401: "Authentication credentials were not provided.",
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+        operation_description=(
+            "Update only the pre-application status by enquiry token. "
+            "Allowed roles: admin, superadmin, and Django superuser."
+        ),
+    )
+    def patch(self, request, enquiry_token):
+        token = enquiry_token.strip().upper()
+        pre_application = get_object_or_404(
+            PreApplication.objects.select_related("referal_codes"),
+            enquiry_token=token,
+        )
+        if pre_application.is_deleted:
+            return Response(
+                {"error": "Cannot update status for archived pre-application."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PreApplicationStatusUpdateSerializer(
+            pre_application,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        response_serializer = PreApplicationSerializer(pre_application)
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
 
 class PreApplicationLookupAPIView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
 
     @swagger_auto_schema(
         security=[{"Bearer": []}],
@@ -198,6 +309,13 @@ class PreApplicationLookupAPIView(APIView):
                 openapi.IN_QUERY,
                 description="Unique enquiry token in ENQ123456 format",
                 type=openapi.TYPE_STRING,
+                required=False,
+            ),
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Set true to include archived rows (superadmin only).",
+                type=openapi.TYPE_BOOLEAN,
                 required=False,
             ),
         ],
@@ -226,7 +344,7 @@ class PreApplicationLookupAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        queryset = PreApplication.objects.select_related("referal_codes")
+        queryset = _filtered_preapplication_queryset(request)
         if email:
             pre_application = get_object_or_404(queryset, email=email)
         else:
@@ -237,7 +355,8 @@ class PreApplicationLookupAPIView(APIView):
 
 
 class BaseCreateReferralAPIView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'reference_code'
 
     def create_referral_response(self, pre_application):
         try:
@@ -290,6 +409,11 @@ class CreateReferralByEnquiryTokenAPIView(BaseCreateReferralAPIView):
     def post(self, request, enquiry_token):
         token = enquiry_token.strip().upper()
         pre_application = get_object_or_404(PreApplication, enquiry_token=token)
+        if pre_application.is_deleted:
+            return Response(
+                {"error": "Cannot generate referral for archived pre-application."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return self.create_referral_response(pre_application)
 
 
@@ -324,7 +448,170 @@ class CreateReferralAPIView(BaseCreateReferralAPIView):
     )
     def post(self, request, pk):
         pre_application = get_object_or_404(PreApplication, pk=pk)
+        if pre_application.is_deleted:
+            return Response(
+                {"error": "Cannot generate referral for archived pre-application."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return self.create_referral_response(pre_application)
+
+
+class ArchivePreApplicationByEnquiryTokenAPIView(APIView):
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
+
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        request_body=PreApplicationArchiveRequestSerializer,
+        responses={
+            200: openapi.Response(
+                description="Pre-application archived successfully.",
+                schema=PreApplicationActionResponseSerializer,
+                examples={"application/json": ARCHIVE_RESPONSE_EXAMPLE},
+            ),
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+    )
+    def patch(self, request, enquiry_token):
+        token = enquiry_token.strip().upper()
+        pre_application = get_object_or_404(PreApplication, enquiry_token=token)
+        serializer = PreApplicationArchiveRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if not pre_application.is_deleted:
+            pre_application.is_deleted = True
+            pre_application.deleted_at = timezone.now()
+            pre_application.deleted_by = request.user
+
+        pre_application.deleted_reason = serializer.validated_data.get("deleted_reason") or None
+        pre_application.save(
+            update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"]
+        )
+
+        return Response(
+            {
+                "message": "Pre-application archived successfully.",
+                "enquiry_token": pre_application.enquiry_token,
+                "is_deleted": pre_application.is_deleted,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ArchivePreApplicationAPIView(APIView):
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
+
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        request_body=PreApplicationArchiveRequestSerializer,
+        responses={
+            200: openapi.Response(
+                description="Pre-application archived successfully.",
+                schema=PreApplicationActionResponseSerializer,
+                examples={"application/json": ARCHIVE_RESPONSE_EXAMPLE},
+            ),
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+    )
+    def patch(self, request, pk):
+        pre_application = get_object_or_404(PreApplication, pk=pk)
+        serializer = PreApplicationArchiveRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if not pre_application.is_deleted:
+            pre_application.is_deleted = True
+            pre_application.deleted_at = timezone.now()
+            pre_application.deleted_by = request.user
+
+        pre_application.deleted_reason = serializer.validated_data.get("deleted_reason") or None
+        pre_application.save(
+            update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"]
+        )
+
+        return Response(
+            {
+                "message": "Pre-application archived successfully.",
+                "enquiry_token": pre_application.enquiry_token,
+                "is_deleted": pre_application.is_deleted,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RestorePreApplicationByEnquiryTokenAPIView(APIView):
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
+
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        responses={
+            200: openapi.Response(
+                description="Pre-application restored successfully.",
+                schema=PreApplicationActionResponseSerializer,
+                examples={"application/json": RESTORE_RESPONSE_EXAMPLE},
+            ),
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+    )
+    def patch(self, request, enquiry_token):
+        token = enquiry_token.strip().upper()
+        pre_application = get_object_or_404(PreApplication, enquiry_token=token)
+        pre_application.is_deleted = False
+        pre_application.deleted_at = None
+        pre_application.deleted_by = None
+        pre_application.deleted_reason = None
+        pre_application.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"])
+
+        return Response(
+            {
+                "message": "Pre-application restored successfully.",
+                "enquiry_token": pre_application.enquiry_token,
+                "is_deleted": pre_application.is_deleted,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RestorePreApplicationAPIView(APIView):
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
+
+    @swagger_auto_schema(
+        security=[{"Bearer": []}],
+        tags=["Pre Application"],
+        responses={
+            200: openapi.Response(
+                description="Pre-application restored successfully.",
+                schema=PreApplicationActionResponseSerializer,
+                examples={"application/json": RESTORE_RESPONSE_EXAMPLE},
+            ),
+            403: "You do not have permission to perform this action.",
+            404: "Pre-application not found",
+        },
+    )
+    def patch(self, request, pk):
+        pre_application = get_object_or_404(PreApplication, pk=pk)
+        pre_application.is_deleted = False
+        pre_application.deleted_at = None
+        pre_application.deleted_by = None
+        pre_application.deleted_reason = None
+        pre_application.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"])
+
+        return Response(
+            {
+                "message": "Pre-application restored successfully.",
+                "enquiry_token": pre_application.enquiry_token,
+                "is_deleted": pre_application.is_deleted,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class CheckReferralCodeAPIView(APIView):
@@ -358,7 +645,7 @@ class CheckReferralCodeAPIView(APIView):
     )
     def get(self, request, code):
         referral = get_object_or_404(
-            ReferalCode.objects.select_related("student"),
+            ReferalCode.objects.select_related("student").filter(student__is_deleted=False),
             code=code,
         )
         serializer = ReferralValidationResponseSerializer(referral.student)

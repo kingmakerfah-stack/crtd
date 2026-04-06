@@ -10,6 +10,16 @@ class EnquiryTokenSequence(models.Model):
 
 
 class PreApplication(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_COMPLETED = "completed"
+    STATUS_NOT_INTERESTED = "not interested"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_NOT_INTERESTED, "Not Interested"),
+    ]
+
     enquiry_token = models.CharField(
         max_length=9,
         unique=True,
@@ -27,7 +37,22 @@ class PreApplication(models.Model):
     college_state = models.CharField(max_length=100)
     passing_year = models.CharField(max_length=4)
     preferred_time = models.CharField(max_length=50)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
     verified = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_reason = models.CharField(max_length=255, null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="deleted_preapplications",
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
