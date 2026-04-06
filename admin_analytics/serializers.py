@@ -40,6 +40,7 @@ class EnquiryTableSerializer(serializers.ModelSerializer):
             "birthplace",
             "status"
         ]
+        read_only_fields = ["enquiry_token"]
 
     def get_full_name(self, obj):
 

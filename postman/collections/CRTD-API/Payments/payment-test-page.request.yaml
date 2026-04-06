@@ -1,0 +1,6 @@
+$kind: http-request
+name: Payment Test Page
+method: GET
+url: '{{baseUrl}}/payments/pay/'
+order: 4000
+description: Test page for payment integration.

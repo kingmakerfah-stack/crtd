@@ -153,7 +153,7 @@ jobs:
             docker-compose up -d --build
             docker image prune -f
             sleep 15
-            curl -sI http://localhost:8000
+            curl -sI http://localhost/api
             EOF
 
   # ────────────────────────────────────────────────────────────

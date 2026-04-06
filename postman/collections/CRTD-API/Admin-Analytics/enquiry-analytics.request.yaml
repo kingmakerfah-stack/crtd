@@ -1,0 +1,9 @@
+$kind: http-request
+name: Enquiry Analytics
+method: GET
+url: '{{baseUrl}}/api/admin-analytics/enquiry-analytics/'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Get enquiry analytics data.

@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Career Preference (Partial)
+method: PATCH
+url: '{{baseUrl}}/api/student/profile/career/'
+order: 10000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "preferred_time": "evening"
+    }
+description: Partially update the authenticated student's career preference.

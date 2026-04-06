@@ -1,0 +1,9 @@
+$kind: http-request
+name: Delete Testimonial
+method: DELETE
+url: '{{baseUrl}}/api/admin-analytics/testimonials/{{pk}}/delete/'
+order: 10000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Delete a testimonial.

@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Personal Details (Partial)
+method: PATCH
+url: '{{baseUrl}}/api/student/profile/personal/'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "first_name": "John"
+    }
+description: Partially update the authenticated student's personal details.

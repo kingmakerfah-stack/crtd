@@ -2,9 +2,9 @@ from django.db import models
 from Student.models import Student
 from jobs.models import Job
 import random 
-
+from django.core.validators import MinValueValidator, MaxValueValidator
 class CoolDown(models.Model):
-    cooldown_days= models.IntegerField(default=10)
+    cooldown_days= models.IntegerField(default=10, validators=[MinValueValidator(0), MaxValueValidator(365)])
 
     def __str__(self):
         return f"{self.cooldown_days} days cooldown"
@@ -37,7 +37,8 @@ class Application(models.Model):
     )
     
     applied_at = models.DateTimeField(auto_now_add=True)
-    cooldown_days_used = models.IntegerField()
+    cooldown_days_used = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(365)])
+    reason = models.TextField(null=True,blank=True)
     reference_id = models.CharField(
         max_length=20,
         unique=True,

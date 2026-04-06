@@ -1,0 +1,22 @@
+$kind: http-request
+name: Create Personal Details
+method: POST
+url: '{{baseUrl}}/api/student/profile/personal/'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "whatsapp_no": "9876543210",
+      "alternate_phone": "9876543211",
+      "birthplace_state": "Maharashtra"
+    }
+description: Create personal details for the authenticated student.

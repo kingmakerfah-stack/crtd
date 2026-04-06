@@ -76,6 +76,9 @@ def generate_unique_referral_code(length=8):
 
 
 def create_referral_for_pre_application(pre_application):
+    if pre_application.is_deleted:
+        raise ReferralGenerationError("Cannot generate referral for archived pre-application")
+
     if pre_application.verified or ReferalCode.objects.filter(student=pre_application).exists():
         raise ReferralGenerationError("Referral already exists for this student")
 

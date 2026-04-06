@@ -1,0 +1,9 @@
+$kind: http-request
+name: List Pre-Applications (Admin)
+method: GET
+url: '{{baseUrl}}/api/pre-application/admin/list/'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Admin endpoint to list all pre-applications.

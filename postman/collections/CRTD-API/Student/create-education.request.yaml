@@ -1,0 +1,21 @@
+$kind: http-request
+name: Create Education
+method: POST
+url: '{{baseUrl}}/api/student/profile/education/'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "qualification": "B.Tech",
+      "specialization": "Computer Science",
+      "college_name": "ABC College",
+      "college_state": "Maharashtra",
+      "passing_year": 2023
+    }
+description: Create education details for the authenticated student.

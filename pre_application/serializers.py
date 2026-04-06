@@ -9,7 +9,16 @@ class PreApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PreApplication
         fields = "__all__"
-        read_only_fields = ["enquiry_token", "verified", "created_at"]
+        read_only_fields = [
+            "enquiry_token",
+            "verified",
+            "created_at",
+            "status",
+            "is_deleted",
+            "deleted_at",
+            "deleted_reason",
+            "deleted_by",
+        ]
 
     def validate_first_name(self, value):
         value = value.strip()
@@ -106,6 +115,62 @@ class PreApplicationLookupSerializer(serializers.ModelSerializer):
     def get_reference_code(self, obj):
         referral = getattr(obj, "referal_codes", None)
         return referral.code if referral else None
+
+
+class PreApplicationAdminListSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    reference_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PreApplication
+        fields = [
+            "id",
+            "enquiry_token",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "whatsapp_no",
+            "alternate_phone",
+            "birthplace_state",
+            "qualification",
+            "specialization",
+            "college_name",
+            "college_state",
+            "passing_year",
+            "preferred_time",
+            "status",
+            "verified",
+            "is_deleted",
+            "deleted_at",
+            "deleted_reason",
+            "deleted_by",
+            "reference_code",
+            "created_at",
+        ]
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_reference_code(self, obj):
+        referral = getattr(obj, "referal_codes", None)
+        return referral.code if referral else None
+
+
+class PreApplicationStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PreApplication
+        fields = ["status"]
+
+
+class PreApplicationArchiveRequestSerializer(serializers.Serializer):
+    deleted_reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+
+class PreApplicationActionResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    enquiry_token = serializers.CharField()
+    is_deleted = serializers.BooleanField()
 
 
 class ReferralValidationResponseSerializer(PreApplicationLookupSerializer):

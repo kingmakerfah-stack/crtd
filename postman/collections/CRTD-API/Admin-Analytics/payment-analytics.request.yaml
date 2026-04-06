@@ -1,0 +1,9 @@
+$kind: http-request
+name: Payment Analytics
+method: GET
+url: '{{baseUrl}}/api/admin-analytics/payments-analytics/'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Get payment analytics data.

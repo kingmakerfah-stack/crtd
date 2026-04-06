@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Reference Status
+method: PATCH
+url: '{{baseUrl}}/api/admin-analytics/reference-code/{{pk}}/update/'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "status": "approved"
+    }
+description: Update the status of a reference code.

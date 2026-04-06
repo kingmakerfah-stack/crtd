@@ -1,0 +1,19 @@
+$kind: http-request
+name: Update Testimonial
+method: PUT
+url: '{{baseUrl}}/api/admin-analytics/testimonials/{{pk}}/update/'
+order: 9000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "John Doe",
+      "content": "Updated content",
+      "rating": 5
+    }
+description: Update an existing testimonial.

@@ -1,0 +1,17 @@
+$kind: http-request
+name: Verify OTP
+method: POST
+url: '{{baseUrl}}/api/accounts/otp/verify/'
+order: 6000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "user@example.com",
+      "otp": "123456",
+      "purpose": "email_verification"
+    }
+description: Verify OTP for email_verification, password_reset, or login_otp.

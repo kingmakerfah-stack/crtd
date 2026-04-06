@@ -1,0 +1,22 @@
+$kind: http-request
+name: Update Personal Details (Full)
+method: PUT
+url: '{{baseUrl}}/api/student/profile/personal/'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "whatsapp_no": "9876543210",
+      "alternate_phone": "9876543211",
+      "birthplace_state": "Maharashtra"
+    }
+description: Fully update the authenticated student's personal details.

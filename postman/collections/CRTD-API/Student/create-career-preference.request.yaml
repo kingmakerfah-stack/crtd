@@ -1,0 +1,17 @@
+$kind: http-request
+name: Create Career Preference
+method: POST
+url: '{{baseUrl}}/api/student/profile/career/'
+order: 8000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "preferred_time": "morning"
+    }
+description: Create career preference for the authenticated student.

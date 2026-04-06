@@ -1,0 +1,9 @@
+$kind: http-request
+name: Generate Referral by Enquiry Token
+method: POST
+url: '{{baseUrl}}/api/pre-application/referral/generate/{{enquiryToken}}/'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Generate a referral code for a pre-application using enquiry token.

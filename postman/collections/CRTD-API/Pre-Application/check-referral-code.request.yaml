@@ -1,0 +1,6 @@
+$kind: http-request
+name: Check Referral Code
+method: GET
+url: '{{baseUrl}}/api/pre-application/referral/check/{{referralCode}}/'
+order: 7000
+description: Check if a referral code is valid.
