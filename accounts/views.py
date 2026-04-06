@@ -16,8 +16,14 @@ from .serializers import (
     OTPVerificationSerializer,
     PasswordResetSerializer,
     UserLoginSerializer,
-    AdminLoginSerializer,
-    AdminLoginVerifySerializer,
+    RBACLoginSerializer,
+    RBACOTPVerifySerializer,
+    MeSerializer,
+    ModuleSerializer,
+    CreateSubAdminSerializer,
+    UpdateSubAdminModulesSerializer,
+    UpdateSubAdminRoleSerializer,
+    SubAdminListSerializer,
 )
 from drf_yasg.utils import swagger_auto_schema
 User = get_user_model()
@@ -25,6 +31,16 @@ from pre_application.models import ReferalCode , PreApplication
 from rest_framework.generics import get_object_or_404
 from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
 from django.db import transaction
+from .models import Module, SubAdminProfile
+from .permissions import IsSuperAdmin, IsAdminPortalUser, CanManageSubadmins
+from .utils import (
+    clear_user_invalidation,
+    clear_user_me_cache,
+    get_cached_me,
+    get_tokens_for_user,
+    invalidate_user_session,
+    set_cached_me,
+)
 
 
 class GoogleAuthView(APIView):
@@ -511,76 +527,281 @@ class PasswordResetView(APIView):
         )
 
 
-class AdminLoginView(APIView):
+# -------------------------------------------------------
+# RBAC ADMIN PORTAL VIEWS (ADDITIVE)
+# -------------------------------------------------------
+
+ADMIN_PORTAL_ROLES = ('superadmin', 'subadmin', 'sales')
+
+
+class RBACAdminLoginView(APIView):
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        request_body=AdminLoginSerializer,
-        responses={200: "OTP sent", 401: "Invalid credentials", 403: "Role not allowed"},
-        tags=["Accounts"],
-        operation_description="Admin/Subadmin step-1 login: password check then send login_otp."
+        request_body=RBACLoginSerializer,
+        responses={200: 'OTP sent', 401: 'Invalid credentials', 403: 'Not authorized'},
+        tags=['Admin RBAC'],
+        operation_description='Admin portal login with email/password. Sends login_otp on success.',
     )
     def post(self, request):
         from utils.email_service import EmailService
 
-        serializer = AdminLoginSerializer(data=request.data)
+        serializer = RBACLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
 
         user = authenticate(request, email=email, password=password)
-        if user is None or user.role != 'subadmin':
-            return Response(
-                {"error": "Invalid credentials."},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+        if not user:
+            return Response({'error': 'Invalid credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if user.role not in ADMIN_PORTAL_ROLES:
+            return Response({'error': 'Not authorized for admin portal.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not user.is_active:
+            return Response({'error': 'Account is deactivated.'}, status=status.HTTP_403_FORBIDDEN)
 
         EmailService.send_verification_otp(user, purpose='login_otp', otp_length=6)
+        return Response({'message': 'OTP sent to your email.'}, status=status.HTTP_200_OK)
 
-        return Response({"message": "OTP sent"}, status=status.HTTP_200_OK)
 
-
-class AdminLoginVerifyOTPView(APIView):
+class RBACAdminOTPVerifyView(APIView):
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        request_body=AdminLoginVerifySerializer,
-        responses={200: "Login successful", 400: "Invalid OTP"},
-        tags=["Accounts"],
-        operation_description="Admin/Subadmin step-2 login: verify login_otp and issue JWT tokens."
+        request_body=RBACOTPVerifySerializer,
+        responses={200: 'Login successful', 400: 'Invalid OTP'},
+        tags=['Admin RBAC'],
+        operation_description='Verify login OTP and issue JWT tokens for admin portal users.',
     )
     def post(self, request):
         from utils.email_service import EmailService
 
-        serializer = AdminLoginVerifySerializer(data=request.data)
+        serializer = RBACOTPVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data['email']
         otp = serializer.validated_data['otp']
 
         user = User.objects.filter(email=email).first()
-        if not user or user.role != 'subadmin':
-            return Response(
-                {"error": "Invalid credentials or verification code."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if not user or user.role not in ADMIN_PORTAL_ROLES:
+            return Response({'error': 'Invalid credentials or verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.is_active:
+            return Response({'error': 'Account is deactivated.'}, status=status.HTTP_403_FORBIDDEN)
 
         result = EmailService.verify_otp(user, otp, purpose='login_otp')
         if not result['success']:
-            return Response(
-                {"error": "Invalid credentials or verification code."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        refresh = RefreshToken.for_user(user)
+        clear_user_invalidation(user.pk)
+
+        if not user.email_verified:
+            user.email_verified = True
+            user.save(update_fields=['email_verified'])
+
+        tokens = get_tokens_for_user(user)
         return Response(
             {
-                "message": "Login successful.",
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-                "email": user.email,
-                "role": user.role,
+                'message': 'Login successful.',
+                'refresh': tokens['refresh'],
+                'access': tokens['access'],
+                'role': user.role,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
+
+
+class RBACMeView(APIView):
+    permission_classes = [IsAdminPortalUser]
+
+    @swagger_auto_schema(security=[{"Bearer": []}],tags=['Admin RBAC'], operation_description='Get current admin portal user profile and module access.')
+    def get(self, request):
+        cached_payload = get_cached_me(request.user.pk, request.user.role)
+        if cached_payload is not None and cached_payload.get('role') == request.user.role:
+            return Response(cached_payload, status=status.HTTP_200_OK)
+
+        serializer = MeSerializer(request.user)
+        payload = serializer.data
+        set_cached_me(request.user.pk, request.user.role, payload)
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class ModuleListView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(tags=['Admin RBAC'], operation_description='List active modules for subadmin assignment.')
+    def get(self, request):
+        modules = Module.objects.filter(is_active=True)
+        return Response(ModuleSerializer(modules, many=True).data, status=status.HTTP_200_OK)
+
+
+class CreateSubAdminView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(
+        request_body=CreateSubAdminSerializer,
+        tags=['Admin RBAC'],
+        operation_description='Create a subadmin and assign module access.',
+    )
+    def post(self, request):
+        serializer = CreateSubAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+
+        user = User.objects.create_user(
+            email=data['email'],
+            password=data['password'],
+            role='subadmin',
+            name=data['name'],
+        )
+
+        profile = SubAdminProfile.objects.create(user=user, created_by=request.user)
+        modules = Module.objects.filter(name__in=data['modules'])
+        profile.allowed_modules.set(modules)
+
+        return Response(
+            {
+                'message': 'SubAdmin created successfully.',
+                'user_id': user.id,
+                'assigned_modules': profile.get_module_names(),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ListSubAdminsView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(tags=['Admin RBAC'], operation_description='List all subadmins and assigned modules.')
+    def get(self, request):
+        users = (
+            User.objects
+            .filter(role='subadmin')
+            .select_related('subadmin_profile__created_by')
+            .prefetch_related('subadmin_profile__allowed_modules')
+        )
+        return Response(SubAdminListSerializer(users, many=True).data, status=status.HTTP_200_OK)
+
+
+class UpdateSubAdminAccessView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(
+        request_body=UpdateSubAdminModulesSerializer,
+        tags=['Admin RBAC'],
+        operation_description='Update allowed modules for a subadmin.',
+    )
+    def patch(self, request, user_id):
+        serializer = UpdateSubAdminModulesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            profile = SubAdminProfile.objects.get(user_id=user_id)
+        except SubAdminProfile.DoesNotExist:
+            return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        modules = Module.objects.filter(name__in=serializer.validated_data['modules'])
+        profile.allowed_modules.set(modules)
+        invalidate_user_session(profile.user_id)
+        clear_user_me_cache(profile.user_id)
+
+        return Response(
+            {
+                'message': 'Modules updated.',
+                'updated_modules': profile.get_module_names(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class UpdateSubAdminRoleView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(
+        request_body=UpdateSubAdminRoleSerializer,
+        tags=['Admin RBAC'],
+        operation_description='Update role for a subadmin user. Allowed roles: subadmin, sales, student.',
+    )
+    def patch(self, request, user_id):
+        serializer = UpdateSubAdminRoleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.pk == user.pk and serializer.validated_data['role'] != 'superadmin':
+            return Response(
+                {'error': 'You cannot change your own role from this endpoint.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.role = serializer.validated_data['role']
+        user.save(update_fields=['role'])
+
+        invalidate_user_session(user.pk)
+        clear_user_me_cache(user.pk)
+
+        return Response(
+            {
+                'message': 'Role updated.',
+                'role': user.role,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ToggleSubAdminStatusView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(tags=['Admin RBAC'], operation_description='Activate or deactivate a subadmin account.')
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id, role='subadmin')
+        except User.DoesNotExist:
+            return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.pk == user.pk and user.is_active:
+            return Response(
+                {'error': 'You cannot deactivate your own account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.is_active = not user.is_active
+        user.save(update_fields=['is_active'])
+
+        try:
+            user.subadmin_profile.is_active = user.is_active
+            user.subadmin_profile.save(update_fields=['is_active'])
+        except SubAdminProfile.DoesNotExist:
+            pass
+
+        if not user.is_active:
+            invalidate_user_session(user.pk)
+            clear_user_me_cache(user.pk)
+
+        return Response(
+            {
+                'message': f"SubAdmin {'activated' if user.is_active else 'deactivated'}.",
+                'is_active': user.is_active,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class DeleteSubAdminView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(tags=['Admin RBAC'], operation_description='Delete a subadmin account.')
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id, role='subadmin')
+        except User.DoesNotExist:
+            return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user.delete()
+        return Response({'message': 'SubAdmin deleted.'}, status=status.HTTP_200_OK)
