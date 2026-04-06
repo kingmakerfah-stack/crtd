@@ -34,6 +34,8 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     ROLE_CHOICES = (
+        ('superadmin', 'Super Admin'),
+        ('sales', 'Sales'),
         ('student', 'Student'),
         ('company', 'Company'),
         ('admin', 'Admin'),
@@ -41,6 +43,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     )
 
     email = models.EmailField(unique=True)
+    name = models.CharField(max_length=100, blank=True, default='')
 
     role = models.CharField(
         max_length=20,
@@ -110,3 +113,62 @@ class EmailOTP(models.Model):
     def is_valid(self):
         """Check if OTP is still valid (not expired and not yet used)."""
         return not self.is_verified and not self.is_expired()
+
+
+class Module(models.Model):
+    MODULE_CHOICES = [
+        ('dashboard', 'Dashboard'),
+        ('web_update', 'Web Update'),
+        ('enquiry_form', 'Enquiry Form'),
+        ('reference_code', 'Reference Code'),
+        ('sub_admin', 'Sub Admin'),
+        ('total_user_status', 'Total User Status'),
+        ('analytics', 'Analytics'),
+        ('payment', 'Payment'),
+        ('job_applications', 'Job Applications'),
+        ('membership', 'Membership'),
+        ('employee_status', 'Employee Status'),
+        ('sales', 'Sales'),
+    ]
+
+    name = models.CharField(max_length=50, unique=True, choices=MODULE_CHOICES)
+    display_name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'accounts_module'
+        ordering = ['order']
+
+    def __str__(self):
+        return self.display_name
+
+
+class SubAdminProfile(models.Model):
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='subadmin_profile',
+    )
+    allowed_modules = models.ManyToManyField(Module, blank=True)
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_subadmins',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'accounts_subadmin_profile'
+
+    def get_module_names(self):
+        return list(self.allowed_modules.values_list('name', flat=True))
+
+    def has_module_access(self, module_name):
+        return self.allowed_modules.filter(name=module_name, is_active=True).exists()
+
+    def __str__(self):
+        return f"SubAdmin: {self.user.email}"

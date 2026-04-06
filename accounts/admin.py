@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser
+from .models import CustomUser, Module, SubAdminProfile
 
 
 @admin.register(CustomUser)
@@ -12,6 +12,7 @@ class CustomUserAdmin(UserAdmin):
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
+        ('Personal Info', {'fields': ('name',)}),
         ('Role', {'fields': ('role',)}),
         ('Verification', {'fields': ('email_verified',)}),
         ('Permissions', {
@@ -34,4 +35,20 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
 
-    search_fields = ('email',)
+    search_fields = ('email', 'name')
+
+
+@admin.register(Module)
+class ModuleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'display_name', 'order', 'is_active')
+    list_filter = ('is_active',)
+    ordering = ('order',)
+    search_fields = ('name', 'display_name')
+
+
+@admin.register(SubAdminProfile)
+class SubAdminProfileAdmin(admin.ModelAdmin):
+    list_display = ('user', 'created_by', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('user__email', 'created_by__email')
+    filter_horizontal = ('allowed_modules',)
