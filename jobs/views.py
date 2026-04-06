@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.exceptions import NotFound
 from .models import Job
-from .serializers import JobSerializer
+from .serializers import JobSerializer,JobCardSerializer,JobDetailSerializer
 from .pagination import JobPagination
 from drf_yasg.utils import swagger_auto_schema
 
@@ -36,7 +36,7 @@ class JobListCreateView(APIView):
         paginator = JobPagination()
         paginated_jobs = paginator.paginate_queryset(jobs, request)
 
-        serializer = JobSerializer(paginated_jobs, many=True)
+        serializer = JobCardSerializer(paginated_jobs, many=True)
         return paginator.get_paginated_response(serializer.data)
     
 
@@ -69,20 +69,34 @@ class JobDetailView(APIView):
         if self.request.method == "GET":
             return [AllowAny()]
         return [IsAdminUser()]
-
+    
     def get_object(self, pk):
         try:
             return Job.objects.get(pk=pk)
         except Job.DoesNotExist:
             raise NotFound("Job not found")
+        
+    @swagger_auto_schema(
+        responses={
+            200: JobDetailSerializer,
+            404: "Job not found"
+        },
+        tags=["Jobs"],
+        operation_description="""
+        Retrieve detailed information about a specific job.
 
-    # Retrieve  
-    '''
+        This endpoint is used when a user clicks on a job card.
+        It returns full job details including description, skills, eligibility, and other metadata.
+
+        No authentication required for viewing job details.
+        """
+    )
+     # DETAIL PAGE
     def get(self, request, pk):
         job = self.get_object(pk)
-        serializer = JobSerializer(job)
-        return Response(serializer.data)
-    '''
+        serializer = JobDetailSerializer(job)
+        return Response(serializer.data,status=status.HTTP_200_OK)
+
     @swagger_auto_schema(
         request_body=JobSerializer,
         responses={

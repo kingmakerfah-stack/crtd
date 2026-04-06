@@ -15,3 +15,38 @@ class JobSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Job role cannot be empty")
         return value
+
+class JobCardSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Job
+        fields = [
+            "id",
+            "job_role",
+            "department",
+            "total_vacancies",
+            "experience",
+            "location",
+            "package",
+        ]
+
+   
+
+
+class JobDetailSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Job
+        fields = [
+            "id",
+            "job_role",
+            "location",
+            "package",
+            "total_vacancies",
+            "experience",
+            "job_description",
+            "skills_required",
+            "eligibility",
+        ]
+
+   
