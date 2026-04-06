@@ -7,8 +7,8 @@ def update_profile_status(student):
     career = getattr(student, 'career_preference', None)
 
     if not (personal and education and career):
-        student.is_profile_complete = False
-        student.save(update_fields=['is_profile_complete'])
+        student.profile_completed = False
+        student.save(update_fields=['profile_completed'])
         return
 
     is_complete = all([
@@ -48,6 +48,6 @@ def update_profile_status(student):
     ])
 
     # Update only if changed 
-    if student.is_profile_complete != is_complete:
-        student.is_profile_complete = is_complete
-        student.save(update_fields=['is_profile_complete'])
+    if student.profile_completed != is_complete:
+        student.profile_completed = is_complete
+        student.save(update_fields=['profile_completed'])

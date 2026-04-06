@@ -9,6 +9,7 @@ from drf_yasg.utils import swagger_auto_schema
 from accounts.permissions import IsStudent
 from .serializers import *
 from .models import *
+from .utils import update_profile_status
 
 # ✅ FIX: Removed all duplicate imports that were scattered mid-file
 # ✅ FIX: Removed unused student_id() helper — all views now use request.user.student_profile consistently
@@ -98,9 +99,11 @@ class StudentPersonalDetails(APIView):
         student = get_student(request)
         serializer = StudentPersonalDetailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(student=student)  # student injected server-side
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+    # 🟢 PARTIAL UPDATE
     @swagger_auto_schema(
         security=[{"Bearer": []}],
         request_body=StudentPersonalDetailSerializer,
@@ -120,6 +123,7 @@ class StudentPersonalDetails(APIView):
         serializer = StudentPersonalDetailSerializer(personal_detail, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        update_profile_status(personal_detail.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
@@ -141,6 +145,7 @@ class StudentPersonalDetails(APIView):
         serializer = StudentPersonalDetailSerializer(personal_detail, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        update_profile_status(personal_detail.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -196,6 +201,7 @@ class StudentEducationView(APIView):
         serializer = StudentEducationSerializer(education, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        update_profile_status(education.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
@@ -217,6 +223,7 @@ class StudentEducationView(APIView):
         serializer = StudentEducationSerializer(education, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        update_profile_status(education.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -272,6 +279,8 @@ class StudentCareerPreferenceView(APIView):
         serializer = StudentCareerPreferenceSerializer(career, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        update_profile_status(career.student)
+
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
@@ -293,4 +302,6 @@ class StudentCareerPreferenceView(APIView):
         serializer = StudentCareerPreferenceSerializer(career, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        update_profile_status(career.student)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
