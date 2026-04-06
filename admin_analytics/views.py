@@ -24,7 +24,7 @@ class EnquiryAnalyticsView(APIView):
     @swagger_auto_schema(security=[{"Bearer": []}])
     def get(self, request):
 
-        analytics = PreApplication.objects.aggregate(
+        analytics = PreApplication.objects.filter(is_deleted=False).aggregate(
             total_enquiry_received=Count("id"),
             today_received=Count(
                 "id",
@@ -32,7 +32,7 @@ class EnquiryAnalyticsView(APIView):
             ),
         )
 
-        enquiry_done = ReferalCode.objects.count()
+        enquiry_done = ReferalCode.objects.filter(student__is_deleted=False).count()
 
         pending_enquiry = max(
             analytics["total_enquiry_received"] - enquiry_done,
@@ -55,14 +55,14 @@ class EnquiryTableView(APIView):
 
     def get(self, request):
 
-        enquiries = PreApplication.objects.all()
+        enquiries = PreApplication.objects.filter(is_deleted=False)
 
         data = []
 
         for i, obj in enumerate(enquiries, start=1):
             data.append({
                 "s_no": i,
-                "enquiry_token": f"ENQ{100000 + obj.id}",
+                "enquiry_token": obj.enquiry_token,
                 "date_time": obj.created_at.strftime("%b %d, %Y at %I:%M%p").lower(),
                 "full_name": f"{obj.first_name} {obj.last_name}",
                 "email": obj.email,
@@ -79,17 +79,19 @@ class ReferenceCodeStatusView(APIView):
 
     def get(self, request):
 
-        total_reference_code = ReferalCode.objects.count()
+        total_reference_code = ReferalCode.objects.filter(student__is_deleted=False).count()
 
         account_not_created = ReferalCode.objects.filter(
-            status="not_used"
+            status="not_used",
+            student__is_deleted=False,
         ).count()
 
         membership_not_completed = ReferalCode.objects.filter(
-            status="membership_pending"
+            status="membership_pending",
+            student__is_deleted=False,
         ).count()
 
-        queryset = ReferalCode.objects.select_related("student").all()
+        queryset = ReferalCode.objects.select_related("student").filter(student__is_deleted=False)
 
         data = []
 
@@ -130,6 +132,12 @@ class UpdateReferenceStatusView(APIView):
         serializer = UpdateReferenceStatusSerializer(data=request.data)
 
         if serializer.is_valid():
+            if ref.student.is_deleted:
+                return Response(
+                    {"error": "Cannot update reference status for archived pre-application"},
+                    status=400,
+                )
+
             ref.status = serializer.validated_data["status"]
             ref.save()
 

@@ -1,9 +1,4 @@
 from django.db import models
-
-# Create your models here.
-import random
-
-from django.db import models
 from pre_application.models import PreApplication
 
 
@@ -39,11 +34,8 @@ class EnquiryAnalytics(models.Model):
     )
 
     def save(self, *args, **kwargs):
-
-        if not self.enquiry_token:
-
-            random_number = random.randint(100000, 999999)
-            self.enquiry_token = f"ENQ{random_number}"
+        if self.student_id:
+            self.enquiry_token = self.student.enquiry_token
 
         super().save(*args, **kwargs)
 
