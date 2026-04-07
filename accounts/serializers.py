@@ -58,6 +58,12 @@ class GoogleAuthSerializer(serializers.Serializer):
         required=False,
         allow_null=True
     )
+    referral_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="Referral code to bind Google signup to a specific pre-application."
+    )
 
 
 class OTPRequestSerializer(serializers.Serializer):

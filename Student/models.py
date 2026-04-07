@@ -17,7 +17,7 @@ class Student(models.Model):
     profile_completed = models.BooleanField(default=False)
 
     is_active = models.BooleanField(default=True)
-
+   
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
