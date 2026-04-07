@@ -7,6 +7,8 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Q
+from accounts.models import CustomUser
+from subscription.models import SubscriptionPlan
 
 
 def generate_transaction_id():
@@ -14,24 +16,26 @@ def generate_transaction_id():
 
 
 
+
 class Payment(models.Model):
 
     STATUS_CHOICES = [
         ("created", "Created"),
-        ("authorized", "Authorized"),
         ("paid", "Paid"),
         ("failed", "Failed"),
+        ("expired", "Expired"),
+        
     ]
 
     # user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
 
-    plan = models.ForeignKey(
-        'subscription.SubscriptionPlan',
+    plan = models.ForeignKey(SubscriptionPlan,
         on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        null=True,          
+        blank=True  
+        
     )
 
 
@@ -54,14 +58,20 @@ class Payment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # is_active = models.BooleanField(default=False)
+
     def activate_subscription(self):
-        if self.status == "paid":
-            return   #idempotent operation,dont activate again if already activated
-        self.subscription_start = timezone.now()
-        self.subscription_end = timezone.now() + timedelta(days=180)
+
+    # Always set subscription start
+        if not self.subscription_start:
+            self.subscription_start = timezone.now()
+
+        # Always set subscription end
+        if not self.subscription_end:
+            self.subscription_end = timezone.now() + timedelta(days=180)
+
         self.status = "paid"
         self.save()
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -121,7 +131,6 @@ class PaymentHistory(models.Model):
     payment_details = models.TextField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
-
         if not self.end_date:
             self.end_date = timezone.now() + timedelta(days=180)
 

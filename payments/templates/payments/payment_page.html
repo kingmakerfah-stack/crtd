@@ -18,7 +18,7 @@
         document.getElementById("pay-btn").onclick = async function () {
 
             // 🔐 Paste your JWT access token here
-            const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NDg1Nzk2LCJpYXQiOjE3NzU0ODU0OTYsImp0aSI6IjU4MjBmZTA4MzUwNTQxYTM4N2ZiZWVhYTZhZTc0YmQxIiwidXNlcl9pZCI6IjE0In0.zUFCWvMMMYWCvT2SGfGft4YCIdEbujBCl1OIN68fAv0";
+            const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1NjE0MDIzLCJpYXQiOjE3NzU1ODUyMjMsImp0aSI6ImJlNjIzMmM2N2EwMjQzZTFiYmQ3ZDIzNTQ5ZmY1ZTdmIiwidXNlcl9pZCI6IjEifQ.0_cgdBffRf_kZRCCFGFRD2y8okzvkWjsphyc46EmHWk";
 
             try {
                 // 1️⃣ Create Order
@@ -52,7 +52,7 @@
 
                         try {
                             // 3️⃣ Verify Payment
-                            const verifyRes = await fetch("http://127.0.0.1:8000/api/payments/verify/", {
+                            const verifyRes = await fetch("http://127.0.0.1:8000/api/payments/verify-payment/", {
                                 method: "POST",
                                 headers: {
                                     "Content-Type": "application/json",

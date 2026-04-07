@@ -2,8 +2,10 @@ import json
 import hmac
 import hashlib
 
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
+
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,7 +16,7 @@ import razorpay
 from .models import Payment
 from .services import create_razorpay_order, get_razorpay_client
 from django.db import transaction
-
+from .utils import expire_old_payments
 from rest_framework.generics import ListAPIView
 from .models import PaymentHistory
 from .serializers import PaymentHistorySerializer
@@ -24,6 +26,8 @@ from django.utils import timezone
 from subscription.models import SubscriptionPlan
 from django.views.decorators.csrf import csrf_exempt
 # from django.utils.decorators import method_decorator
+import logging
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -39,24 +43,29 @@ User = get_user_model()
 # @permission_classes([AllowAny])
 def create_order(request):
 
+    expire_old_payments() 
+
     # amount = 50000  # ₹500 in paise
 
     # get the current user if not then temp user for testing
     
     
-    # user = request.user
-    user =User.objects.first() #for testing the payment flow without authentication and then we will change it to the authenticated user in the future
+    user = request.user
+    # user =User.objects.first() 
+    # #for testing the payment flow without authentication and then we will change it to the authenticated user in the future
 
     if not user:
         return Response({"error": "No user found in database"}, status=400)
     #  Check active subscription FIRST (before creating order)
-    existing = Payment.objects.filter(
-        user=user,
-        status="paid",
-        subscription_end__gt=timezone.now()
-    ).first()
+    
 
-    if existing:
+    existing_payment = Payment.objects.filter(
+    user=user,
+    status="paid",
+    subscription_end__gt=timezone.now()
+).first()
+
+    if existing_payment:
         return Response({
             "error": "Active subscription already exists"
         }, status=400)
@@ -80,11 +89,12 @@ def create_order(request):
     
 
     #  Always create new payment (NO get_or_create)
-    payment = Payment.objects.create(
+    Payment.objects.create(
         user=user,
         plan=plan,
         razorpay_order_id=order["id"],
-        amount=amount
+        amount=amount,
+        status="created"
     )
 
     
@@ -108,6 +118,7 @@ def create_order(request):
 # @permission_classes([AllowAny])
 @permission_classes([IsAuthenticated])
 def verify_payment(request):
+    # data = request.data
 
     client = get_razorpay_client()
 
@@ -124,6 +135,8 @@ def verify_payment(request):
         "razorpay_signature": signature
     }
 
+    
+
     try:
         # Verify signature from Razorpay
         client.utility.verify_payment_signature(params)
@@ -134,8 +147,7 @@ def verify_payment(request):
 
             # Prevent duplicate processing
             if payment.status == "paid":
-                return Response({
-                    "message": "Payment already processed"
+                return Response({"message":"Payment already processed"
                 })
             # Prevent multiple active subscriptions for the same user
             existing_paid = Payment.objects.filter(
@@ -143,30 +155,44 @@ def verify_payment(request):
                 status="paid",
                 subscription_end__gt=timezone.now()
             ).exclude(id=payment.id).exists()
+            
 
             if existing_paid:
                 return Response({
                     "error": "Active subscription already exists"
                 }, status=400)
             
+            payment_details = client.payment.fetch(payment_id)
+            method = payment_details.get("method", "unknown")
+            
             # ✅ Save payment details
             payment.razorpay_payment_id = payment_id
             payment.razorpay_signature = signature
             payment.activate_subscription()
-            payment.save()
+
+            
+            # payment.save()
+
+            # ✅ Prevent duplicate history
+            if not PaymentHistory.objects.filter(
+                razorpay_payment_id=payment_id
+            ).exists():
 
 
             
             # create the payment history record for the successful payment andsave the details in the payment history model for the admin to view the payment history in the admin panel
-            PaymentHistory.objects.create(
-                payment=payment,
-                user=payment.user,
-                amount=payment.amount / 100,   # convert paise to rupees
-                payment_method="upi",
-                payment_status="completed",
-                razorpay_payment_id=payment_id,
-                payment_details=f"Subscription Plan: {payment.plan.name}"
-            )
+                PaymentHistory.objects.create(
+                    payment=payment,
+                    user=payment.user,
+                    amount=payment.amount / 100,
+                    payment_method=method,
+                    payment_status="completed",
+                    razorpay_payment_id=payment_id,
+                    payment_details=f"Subscription Plan: {payment.plan.name if payment.plan else 'N/A'}"
+                )
+
+                # print("AFTER ACTIVATION:", payment.status, payment.subscription_end)
+                logger.info(f"Payment activated for order {order_id}")
 
         return Response({
             "message": "Payment verified successfully",
@@ -177,10 +203,26 @@ def verify_payment(request):
         return Response({"error": "Payment record not found"}, status=404)
 
     except razorpay.errors.SignatureVerificationError:
+        if payment_id:
+
+            PaymentHistory.objects.create(
+                user=request.user,
+                amount=0,
+                payment_method="unknown",
+                payment_status="failed",
+                razorpay_payment_id=payment_id,  # if available
+                payment_details="Signature verification failed"
+            )
         return Response(
             {"error": "Payment verification failed"},
             status=400
         )
+    
+    
+
+    except Exception as e:
+        logger.error(f"Payment error: {str(e)}")
+        return Response({"error": "Internal server error"}, status=500)
 
     
 
@@ -224,30 +266,36 @@ def razorpay_webhook(request):
             order_id = payment_entity.get("order_id")
             method = payment_entity.get("method", "unknown")
 
-            payment = Payment.objects.select_for_update().get(
-                razorpay_order_id=order_id
-            )
+            payment = Payment.objects.select_for_update().filter(razorpay_order_id=order_id).first()
+
+            if not payment:
+                return Response({"error": "Payment not found"}, status=404)
 
             
             # SUCCESS CASE
             
             if event == "payment.captured":
 
-                if payment.status == "paid":
-                    return Response({"message": "Already processed"})
+                if payment.status != "paid":
+                    payment.razorpay_payment_id = payment_id
+                    payment.activate_subscription()
+                    # return Response({"message": "Already processed"})
 
-                payment.razorpay_payment_id = payment_id
-                payment.activate_subscription()
+                if not PaymentHistory.objects.filter(
+                    razorpay_payment_id=payment_id
+                ).exists():
 
-                PaymentHistory.objects.create(
-                    payment=payment,
-                    user=payment.user,
-                    amount=payment.amount / 100,
-                    payment_method=method,
-                    payment_status="completed",
-                    razorpay_payment_id=payment_id,
-                    payment_details="Webhook success"
-                )
+                
+
+                    PaymentHistory.objects.create(
+                        payment=payment,
+                        user=payment.user,
+                        amount=payment.amount / 100,
+                        payment_method=method,
+                        payment_status="completed",
+                        razorpay_payment_id=payment_id,
+                        payment_details="Webhook success"
+                    )
 
             
             #  FAILURE CASE
@@ -260,6 +308,11 @@ def razorpay_webhook(request):
                     payment.razorpay_payment_id = payment_id
                     payment.save()
 
+                #  Always log failure (but avoid duplicate)
+                if not PaymentHistory.objects.filter(
+                    razorpay_payment_id=payment_id
+                ).exists():
+
                     PaymentHistory.objects.create(
                         payment=payment,
                         user=payment.user,
@@ -270,11 +323,50 @@ def razorpay_webhook(request):
                         payment_details="Webhook failure"
                     )
 
+
     except Payment.DoesNotExist:
         return Response({"error": "Payment not found"}, status=404)
 
     return Response({"status": "Webhook processed"})
 
+
+
+#views for the payment failure
+@swagger_auto_schema(
+    method="post",
+    tags=["Payments"],
+    operation_description="Handle payment failure from frontend and update payment status.",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def payment_failed(request):
+
+    order_id = request.data.get("razorpay_order_id")
+    payment_id = request.data.get("razorpay_payment_id")
+
+    try:
+        payment = Payment.objects.get(razorpay_order_id=order_id)
+
+        if payment.status != "paid":
+            payment.status = "failed"
+            payment.razorpay_payment_id = payment_id
+            payment.save()
+
+            PaymentHistory.objects.create(
+                payment=payment,
+                user=payment.user,
+                amount=payment.amount / 100,
+                payment_method="unknown",
+                payment_status="failed",
+                razorpay_payment_id=payment_id,
+                payment_details="Frontend failure"
+            )
+
+        return Response({"message": "Failure recorded"})
+
+    except Payment.DoesNotExist:
+        return Response({"error": "Payment not found"}, status=404)
+    
 
 # from django.shortcuts import render
 
