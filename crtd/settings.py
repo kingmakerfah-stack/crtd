@@ -343,9 +343,13 @@ if not IS_LOCAL_ENV:
 # -------------------------------------------------------
 # RAZORPAY CONFIG
 # -------------------------------------------------------
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_KEY_ID = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
+RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
 RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+
+# print("ENV FILE PATH:", ENV_FILE)
+# print("KEY:", os.getenv("RAZORPAY_KEY_ID"))
+# print("SECRET:", os.getenv("RAZORPAY_KEY_SECRET"))
 
 # -------------------------------------------------------
 # APPLICATIONS
