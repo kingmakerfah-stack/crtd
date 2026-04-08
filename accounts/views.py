@@ -42,6 +42,8 @@ from .utils import (
     set_cached_me,
 )
 
+from utils.email_service import EmailService
+
 
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
@@ -326,7 +328,6 @@ class RegisterAPIView(APIView):
 
         # With SQLite, creating the OTP record before this transaction  commits can
         # hit "database is locked". Queue the OTP workflow after commit instead.
-        from utils.email_service import EmailService
         transaction.on_commit(
             lambda: EmailService.send_verification_otp(
                 user,
