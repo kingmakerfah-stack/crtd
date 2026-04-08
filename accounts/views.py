@@ -52,14 +52,14 @@ def _is_superadmin(user):
 
 
 def _manageable_subadmin_users(actor):
-    queryset = User.objects.filter(role='subadmin').select_related('subadmin_profile__created_by').order_by('-created_at', '-id')
+    queryset = User.objects.filter(role='subadmin').order_by('-created_at', '-id')
     if _is_superadmin(actor):
         return queryset
     return queryset.filter(subadmin_profile__created_by=actor)
 
 
 def _manageable_subadmin_profiles(actor):
-    queryset = SubAdminProfile.objects.select_related('user', 'created_by').prefetch_related('allowed_modules')
+    queryset = SubAdminProfile.objects.all()
     if _is_superadmin(actor):
         return queryset.filter(user__role='subadmin')
     return queryset.filter(user__role='subadmin', created_by=actor)
@@ -863,7 +863,11 @@ class ListSubAdminsView(APIView):
 
     @swagger_auto_schema(tags=['Admin RBAC'], operation_description='List all subadmins and assigned modules.')
     def get(self, request):
-        users = _manageable_subadmin_users(request.user).prefetch_related('subadmin_profile__allowed_modules')
+        users = (
+            _manageable_subadmin_users(request.user)
+            .select_related('subadmin_profile__created_by')
+            .prefetch_related('subadmin_profile__allowed_modules')
+        )
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(users, request, view=self)
         return paginator.get_paginated_response(SubAdminListSerializer(page, many=True).data)
