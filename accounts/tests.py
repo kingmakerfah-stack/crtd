@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.hashers import make_password
 from django.test import TestCase
@@ -8,7 +9,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import CustomUser, EmailOTP, Module, SubAdminProfile
-from accounts.utils import clear_user_invalidation, get_tokens_for_user, invalidate_user_session
+from accounts.utils import clear_user_invalidation, get_tokens_for_user, invalidate_user_session, is_user_invalidated
+from pre_application.models import PreApplication, ReferalCode
 from utils.email_service import EmailService
 
 
@@ -116,6 +118,106 @@ class AuthResponseNormalizationTests(APITestCase):
 		self.assertEqual(response.data['error'], 'Password reset request is invalid.')
 
 
+class ChangePasswordTests(APITestCase):
+	def setUp(self):
+		self.student = CustomUser.objects.create_user(
+			email='student-change@example.com',
+			password='OldPass@123',
+			role='student',
+		)
+		self.subadmin = CustomUser.objects.create_user(
+			email='subadmin-change@example.com',
+			password='SubOldPass@123',
+			role='subadmin',
+		)
+
+	def test_student_can_change_password_and_session_is_invalidated(self):
+		self.client.force_authenticate(self.student)
+		response = self.client.post(
+			reverse('change_password'),
+			{
+				'current_password': 'OldPass@123',
+				'new_password': 'NewPass@123',
+				'confirm_new_password': 'NewPass@123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.student.refresh_from_db()
+		self.assertTrue(self.student.check_password('NewPass@123'))
+		self.assertTrue(is_user_invalidated(self.student.pk))
+
+	def test_change_password_rejects_wrong_current_password(self):
+		self.client.force_authenticate(self.student)
+		response = self.client.post(
+			reverse('change_password'),
+			{
+				'current_password': 'WrongPass@123',
+				'new_password': 'NewPass@123',
+				'confirm_new_password': 'NewPass@123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def test_change_password_rejects_mismatched_new_passwords(self):
+		self.client.force_authenticate(self.student)
+		response = self.client.post(
+			reverse('change_password'),
+			{
+				'current_password': 'OldPass@123',
+				'new_password': 'NewPass@123',
+				'confirm_new_password': 'AnotherNewPass@123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def test_change_password_rejects_same_as_current_password(self):
+		self.client.force_authenticate(self.student)
+		response = self.client.post(
+			reverse('change_password'),
+			{
+				'current_password': 'OldPass@123',
+				'new_password': 'OldPass@123',
+				'confirm_new_password': 'OldPass@123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def test_change_password_requires_authentication(self):
+		response = self.client.post(
+			reverse('change_password'),
+			{
+				'current_password': 'OldPass@123',
+				'new_password': 'NewPass@123',
+				'confirm_new_password': 'NewPass@123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+	def test_change_password_forbidden_for_non_student(self):
+		self.client.force_authenticate(self.subadmin)
+		response = self.client.post(
+			reverse('change_password'),
+			{
+				'current_password': 'SubOldPass@123',
+				'new_password': 'SubNewPass@123',
+				'confirm_new_password': 'SubNewPass@123',
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class RBACAdminPortalTests(APITestCase):
 	def setUp(self):
 		self.superadmin = CustomUser.objects.create_user(
@@ -152,7 +254,7 @@ class RBACAdminPortalTests(APITestCase):
 		response = self.client.get(reverse('rbac-module-list'))
 
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
-		returned = {item['name'] for item in response.data}
+		returned = {item['name'] for item in response.data['results']}
 		self.assertEqual(returned, {'dashboard', 'analytics', 'sub_admin'})
 
 	def test_superadmin_can_update_subadmin_module_access(self):
@@ -231,11 +333,12 @@ class RBACAdminPortalTests(APITestCase):
 		tokens = get_tokens_for_user(self.subadmin)
 
 		self.client.force_authenticate(self.superadmin)
-		update_response = self.client.patch(
-			reverse('rbac-subadmin-update-role', args=[self.subadmin.id]),
-			{'role': 'sales'},
-			format='json',
-		)
+		with self.captureOnCommitCallbacks(execute=True):
+			update_response = self.client.patch(
+				reverse('rbac-subadmin-update-role', args=[self.subadmin.id]),
+				{'role': 'sales'},
+				format='json',
+			)
 
 		self.assertEqual(update_response.status_code, status.HTTP_200_OK)
 		self.subadmin.refresh_from_db()
@@ -265,7 +368,7 @@ class RBACAdminPortalTests(APITestCase):
 			format='json',
 		)
 
-		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 	def test_subadmin_cannot_create_or_list_subadmins(self):
 		self.client.force_authenticate(self.subadmin)
@@ -315,11 +418,133 @@ class RBACAdminPortalTests(APITestCase):
 		self.assertEqual(update_response.status_code, status.HTTP_200_OK)
 		self.assertEqual(delete_response.status_code, status.HTTP_200_OK)
 
-	def test_me_ignores_superuser_flag_for_subadmin_capabilities(self):
-		self.subadmin.is_superuser = True
-		self.subadmin.save(update_fields=['is_superuser'])
+	def test_subadmin_with_module_only_lists_owned_subadmins(self):
+		self.subadmin.subadmin_profile.allowed_modules.add(self.module_subadmin)
+		owned = CustomUser.objects.create_user(
+			email='owned-sub@example.com',
+			password='OwnedPass@123',
+			role='subadmin',
+			name='Owned Sub',
+		)
+		other_owner = CustomUser.objects.create_user(
+			email='other-owner@example.com',
+			password='OwnerPass@123',
+			role='superadmin',
+			name='Other Owner',
+		)
+		SubAdminProfile.objects.create(user=owned, created_by=self.subadmin)
+		external = CustomUser.objects.create_user(
+			email='external-sub@example.com',
+			password='ExternalPass@123',
+			role='subadmin',
+			name='External Sub',
+		)
+		SubAdminProfile.objects.create(user=external, created_by=other_owner)
 
 		self.client.force_authenticate(self.subadmin)
+		response = self.client.get(reverse('rbac-subadmin-list'))
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		emails = {item['email'] for item in response.data['results']}
+		self.assertIn(owned.email, emails)
+		self.assertNotIn(external.email, emails)
+
+	def test_cache_failure_does_not_mark_user_invalidated(self):
+		with patch('accounts.utils.cache.get', side_effect=RuntimeError('cache down')):
+			self.assertFalse(is_user_invalidated(self.subadmin.pk))
+
+	def test_subadmin_cannot_update_access_for_unmanaged_subadmin(self):
+		self.subadmin.subadmin_profile.allowed_modules.add(self.module_subadmin)
+		other_superadmin = CustomUser.objects.create_user(
+			email='other-superadmin@example.com',
+			password='OtherSuperPass@123',
+			role='superadmin',
+			name='Other Super',
+		)
+		external_subadmin = CustomUser.objects.create_user(
+			email='external-manage@example.com',
+			password='ExternalManagePass@123',
+			role='subadmin',
+			name='External Manage',
+		)
+		SubAdminProfile.objects.create(user=external_subadmin, created_by=other_superadmin)
+
+		self.client.force_authenticate(self.subadmin)
+		response = self.client.patch(
+			reverse('rbac-subadmin-update-access', args=[external_subadmin.id]),
+			{'modules': ['dashboard']},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class RegistrationFlowTests(APITestCase):
+	def setUp(self):
+		self.pre_application = PreApplication.objects.create(
+			first_name='Asha',
+			last_name='Patel',
+			email='asha-register@example.com',
+			whatsapp_no='+919876543210',
+			alternate_phone='+919876543211',
+			birthplace_state='Gujarat',
+			qualification='B.Tech',
+			specialization='CSE',
+			college_name='Example College',
+			college_state='Gujarat',
+			passing_year='2024',
+			preferred_time='Evening',
+			verified=True,
+		)
+		self.referral = ReferalCode.objects.create(
+			student=self.pre_application,
+			code='REG12345',
+			status=ReferalCode.STATUS_NOT_USED,
+			is_used=False,
+		)
+
+	@patch('utils.email_service.EmailService.send_verification_otp')
+	def test_register_consumes_referral_once(self, mock_send_otp):
+		with self.captureOnCommitCallbacks(execute=True):
+			first_response = self.client.post(
+				reverse('register'),
+				{
+					'email': self.pre_application.email,
+					'password': 'SecurePass@123',
+					'confirm_password': 'SecurePass@123',
+					'reference_code': self.referral.code,
+				},
+				format='json',
+			)
+		second_response = self.client.post(
+			reverse('register'),
+			{
+				'email': self.pre_application.email,
+				'password': 'SecurePass@123',
+				'confirm_password': 'SecurePass@123',
+				'reference_code': self.referral.code,
+			},
+			format='json',
+		)
+
+		self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+		self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.referral.refresh_from_db()
+		self.assertEqual(self.referral.status, ReferalCode.STATUS_ACCOUNT_CREATED)
+		self.assertTrue(self.referral.is_used)
+		self.assertEqual(mock_send_otp.call_count, 1)
+
+	def test_me_ignores_superuser_flag_for_subadmin_capabilities(self):
+		subadmin = CustomUser.objects.create_user(
+			email='flagged-subadmin@example.com',
+			password='FlaggedPass@123',
+			role='subadmin',
+			name='Flagged Subadmin',
+		)
+		subadmin.is_superuser = True
+		subadmin.save(update_fields=['is_superuser'])
+
+		self.client.force_authenticate(subadmin)
 		response = self.client.get(reverse('rbac-admin-me'))
 
 		self.assertEqual(response.status_code, status.HTTP_200_OK)

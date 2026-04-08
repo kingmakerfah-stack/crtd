@@ -6,6 +6,7 @@ from .views import (
     OTPRequestView,
     OTPVerificationView,
     PasswordResetView,
+    ChangePasswordView,
 )
 from .views import GoogleAuthView
 
@@ -29,6 +30,9 @@ urlpatterns = [
 
     # Final step of forgot-password: set new password after OTP is verified
     path('password-reset/', PasswordResetView.as_view(), name='password_reset'),
+
+    # Authenticated account settings password change
+    path('change-password/', ChangePasswordView.as_view(), name='change_password'),
 
     # Mirror RBAC routes here so name resolution works even if project URL wiring differs in CI.
     path('admin/', include('accounts.admin_urls')),

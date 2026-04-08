@@ -1,9 +1,10 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -15,6 +16,7 @@ from .serializers import (
     OTPRequestSerializer,
     OTPVerificationSerializer,
     PasswordResetSerializer,
+    ChangePasswordSerializer,
     UserLoginSerializer,
     RBACLoginSerializer,
     RBACOTPVerifySerializer,
@@ -30,8 +32,8 @@ User = get_user_model()
 from pre_application.models import ReferalCode , PreApplication
 from rest_framework.generics import get_object_or_404
 from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
-from django.db import transaction
 from .models import Module, SubAdminProfile
+from .pagination import AccountsListPagination
 from .permissions import IsSuperAdmin, IsAdminPortalUser, CanManageSubadmins
 from .utils import (
     clear_user_invalidation,
@@ -41,6 +43,24 @@ from .utils import (
     invalidate_user_session,
     set_cached_me,
 )
+
+
+def _is_superadmin(user):
+    return getattr(user, "role", None) == "superadmin"
+
+
+def _manageable_subadmin_users(actor):
+    queryset = User.objects.filter(role='subadmin').select_related('subadmin_profile__created_by').order_by('-created_at', '-id')
+    if _is_superadmin(actor):
+        return queryset
+    return queryset.filter(subadmin_profile__created_by=actor)
+
+
+def _manageable_subadmin_profiles(actor):
+    queryset = SubAdminProfile.objects.select_related('user', 'created_by').prefetch_related('allowed_modules')
+    if _is_superadmin(actor):
+        return queryset.filter(user__role='subadmin')
+    return queryset.filter(user__role='subadmin', created_by=actor)
 
 
 class GoogleAuthView(APIView):
@@ -56,6 +76,7 @@ class GoogleAuthView(APIView):
         tags=["Accounts"],
         operation_description="Authenticate user using Google ID token."
     )
+    @transaction.atomic
     def post(self, request):
         serializer = GoogleAuthSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -146,57 +167,83 @@ class GoogleAuthView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        created_user = False
-        if not user:
-            user = User.objects.create_user(
-                email=email,
-                password=None,
-                role=role,
+        try:
+            with transaction.atomic():
+                if referral_code:
+                    referral = get_object_or_404(
+                        ReferalCode.objects.select_for_update().select_related("student"),
+                        code=referral_code,
+                    )
+                    pre_app = referral.student
+
+                    if pre_app.is_deleted:
+                        return Response(
+                            {"detail": "Referral code is linked to an archived pre-application."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                    if referral.status != ReferalCode.STATUS_NOT_USED or referral.is_used:
+                        return Response(
+                            {"detail": "Referral code already used."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                    if not pre_app.verified:
+                        return Response(
+                            {"detail": "Pre-application not verified yet."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                if not user:
+                    user = User.objects.create_user(
+                        email=email,
+                        password=None,
+                        role=role,
+                    )
+                    user.set_unusable_password()
+                    user.email_verified = True
+                    user.save(update_fields=["password", "email_verified"])
+
+                if referral and pre_app:
+                    student = getattr(user, "student_profile", None)
+                    if not student:
+                        student = Student.objects.create(
+                            user=user,
+                            enrollment_id=f"ENR-{pre_app.id}"
+                        )
+
+                        StudentPersonalDetail.objects.create(
+                            student=student,
+                            first_name=pre_app.first_name,
+                            last_name=pre_app.last_name,
+                            email=pre_app.email,
+                            whatsapp_no=pre_app.whatsapp_no,
+                            alternate_phone=pre_app.alternate_phone,
+                            birthplace_state=pre_app.birthplace_state
+                        )
+
+                        StudentEducation.objects.create(
+                            student=student,
+                            qualification=pre_app.qualification,
+                            specialization=pre_app.specialization,
+                            college_name=pre_app.college_name,
+                            college_state=pre_app.college_state,
+                            passing_year=pre_app.passing_year
+                        )
+
+                        StudentCareerPreference.objects.create(
+                            student=student,
+                            preferred_time=pre_app.preferred_time
+                        )
+
+                    referral.status = ReferalCode.STATUS_ACCOUNT_CREATED
+                    referral.is_used = True
+                    referral.save(update_fields=["status", "is_used"])
+        except IntegrityError:
+            return Response(
+                {"detail": "Could not complete Google signup. Please retry."},
+                status=status.HTTP_409_CONFLICT,
             )
-            user.set_unusable_password()
-            user.email_verified = True  # Google email is verified
-            user.save(update_fields=["password", "email_verified"])
-            created_user = True
-
-        # If this is a referral-based signup and the student profile does not exist yet,
-        # create it from the pre-application data.
-        if referral and pre_app:
-            student = getattr(user, "student_profile", None)
-            if not student:
-                student = Student.objects.create(
-                    user=user,
-                    enrollment_id=f"ENR-{pre_app.id}"
-                )
-
-                StudentPersonalDetail.objects.create(
-                    student=student,
-                    first_name=pre_app.first_name,
-                    last_name=pre_app.last_name,
-                    email=pre_app.email,
-                    whatsapp_no=pre_app.whatsapp_no,
-                    alternate_phone=pre_app.alternate_phone,
-                    birthplace_state=pre_app.birthplace_state
-                )
-
-                StudentEducation.objects.create(
-                    student=student,
-                    qualification=pre_app.qualification,
-                    specialization=pre_app.specialization,
-                    college_name=pre_app.college_name,
-                    college_state=pre_app.college_state,
-                    passing_year=pre_app.passing_year
-                )
-
-                StudentCareerPreference.objects.create(
-                    student=student,
-                    preferred_time=pre_app.preferred_time
-                )
-
-            # Mark referral as consumed
-            if referral.status == "not_used":
-                referral.status = "account_created"
-                referral.is_used = True
-                referral.save(update_fields=["status", "is_used"])
 
         refresh = RefreshToken.for_user(user)
 
@@ -242,7 +289,10 @@ class RegisterAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        referral = get_object_or_404(ReferalCode, code=reference_code)
+        referral = get_object_or_404(
+            ReferalCode.objects.select_for_update().select_related("student"),
+            code=reference_code,
+        )
 
         # 2️⃣ Validate referral
         # Prefer status as source of truth; keep is_used fallback for compatibility.
@@ -256,12 +306,18 @@ class RegisterAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        pre_app = referral.student  # your FK name
+        pre_app = referral.student
 
         if not pre_app.verified:
             return Response(
                 {"error": "Pre-application not verified yet."},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if pre_app.is_deleted:
+            return Response(
+                {"error": "Cannot register from an archived pre-application."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # 3️⃣ Register user
@@ -283,46 +339,47 @@ class RegisterAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = serializer.save()
+        try:
+            user = serializer.save()
 
-        # 4️⃣ Create Student
-        student = Student.objects.create(
-            user=user,
-            enrollment_id=f"ENR-{pre_app.id}"
-        )
+            student = Student.objects.create(
+                user=user,
+                enrollment_id=f"ENR-{pre_app.id}"
+            )
 
-        # 5️⃣ Personal Detail
-        StudentPersonalDetail.objects.create(
-            student=student,
-            first_name=pre_app.first_name,
-            last_name=pre_app.last_name,
-            email=pre_app.email,
-            whatsapp_no=pre_app.whatsapp_no,
-            alternate_phone=pre_app.alternate_phone,
-            birthplace_state=pre_app.birthplace_state
-        )
+            StudentPersonalDetail.objects.create(
+                student=student,
+                first_name=pre_app.first_name,
+                last_name=pre_app.last_name,
+                email=pre_app.email,
+                whatsapp_no=pre_app.whatsapp_no,
+                alternate_phone=pre_app.alternate_phone,
+                birthplace_state=pre_app.birthplace_state
+            )
 
-        # 6️⃣ Education
-        StudentEducation.objects.create(
-            student=student,
-            qualification=pre_app.qualification,
-            specialization=pre_app.specialization,
-            college_name=pre_app.college_name,
-            college_state=pre_app.college_state,
-            passing_year=pre_app.passing_year
-        )
+            StudentEducation.objects.create(
+                student=student,
+                qualification=pre_app.qualification,
+                specialization=pre_app.specialization,
+                college_name=pre_app.college_name,
+                college_state=pre_app.college_state,
+                passing_year=pre_app.passing_year
+            )
 
-        # 7️⃣ Career Preference
-        StudentCareerPreference.objects.create(
-            student=student,
-            preferred_time=pre_app.preferred_time
-        )
+            StudentCareerPreference.objects.create(
+                student=student,
+                preferred_time=pre_app.preferred_time
+            )
 
-        pre_app.verified = True
-        pre_app.save()
-        referral.status = ReferalCode.STATUS_ACCOUNT_CREATED
-        referral.is_used = True
-        referral.save(update_fields=["status", "is_used"])
+            referral.status = ReferalCode.STATUS_ACCOUNT_CREATED
+            referral.is_used = True
+            referral.save(update_fields=["status", "is_used"])
+        except IntegrityError:
+            transaction.set_rollback(True)
+            return Response(
+                {"error": "Registration could not be completed. Please retry."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         # With SQLite, creating the OTP record before this transaction  commits can
         # hit "database is locked". Queue the OTP workflow after commit instead.
@@ -588,7 +645,7 @@ class PasswordResetView(APIView):
 
         # Gate: a verified password_reset OTP must exist
         try:
-            otp_instance = EmailOTP.objects.get(
+            otp_instance = EmailOTP.objects.select_for_update().get(
                 user=user,
                 purpose='password_reset',
                 is_verified=True,
@@ -609,6 +666,37 @@ class PasswordResetView(APIView):
         return Response(
             {"message": "Password reset successfully. You can now log in."},
             status=status.HTTP_200_OK
+        )
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        request_body=ChangePasswordSerializer,
+        responses={200: "Password changed successfully", 400: "Validation error", 403: "Forbidden"},
+        tags=["Accounts"],
+        operation_description="Change password for authenticated student users and force re-login.",
+    )
+    def post(self, request):
+        if request.user.role != 'student':
+            return Response(
+                {'error': 'Only student users can change password from account settings.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+
+        request.user.set_password(serializer.validated_data['new_password'])
+        request.user.save(update_fields=['password'])
+
+        invalidate_user_session(request.user.pk)
+        clear_user_me_cache(request.user.pk)
+
+        return Response(
+            {'message': 'Password changed successfully. Please log in again.'},
+            status=status.HTTP_200_OK,
         )
 
 
@@ -715,11 +803,14 @@ class RBACMeView(APIView):
 
 class ModuleListView(APIView):
     permission_classes = [CanManageSubadmins]
+    pagination_class = AccountsListPagination
 
     @swagger_auto_schema(tags=['Admin RBAC'], operation_description='List active modules for subadmin assignment.')
     def get(self, request):
         modules = Module.objects.filter(is_active=True)
-        return Response(ModuleSerializer(modules, many=True).data, status=status.HTTP_200_OK)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(modules, request, view=self)
+        return paginator.get_paginated_response(ModuleSerializer(page, many=True).data)
 
 
 class CreateSubAdminView(APIView):
@@ -730,22 +821,30 @@ class CreateSubAdminView(APIView):
         tags=['Admin RBAC'],
         operation_description='Create a subadmin and assign module access.',
     )
+    @transaction.atomic
     def post(self, request):
         serializer = CreateSubAdminSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
 
-        user = User.objects.create_user(
-            email=data['email'],
-            password=data['password'],
-            role='subadmin',
-            name=data['name'],
-        )
+        try:
+            user = User.objects.create_user(
+                email=data['email'],
+                password=data['password'],
+                role='subadmin',
+                name=data['name'],
+            )
 
-        profile = SubAdminProfile.objects.create(user=user, created_by=request.user)
-        modules = Module.objects.filter(name__in=data['modules'])
-        profile.allowed_modules.set(modules)
+            profile = SubAdminProfile.objects.create(user=user, created_by=request.user)
+            modules = Module.objects.filter(name__in=data['modules'])
+            profile.allowed_modules.set(modules)
+        except IntegrityError:
+            transaction.set_rollback(True)
+            return Response(
+                {'error': 'SubAdmin could not be created. Please retry.'},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         return Response(
             {
@@ -759,16 +858,14 @@ class CreateSubAdminView(APIView):
 
 class ListSubAdminsView(APIView):
     permission_classes = [CanManageSubadmins]
+    pagination_class = AccountsListPagination
 
     @swagger_auto_schema(tags=['Admin RBAC'], operation_description='List all subadmins and assigned modules.')
     def get(self, request):
-        users = (
-            User.objects
-            .filter(role='subadmin')
-            .select_related('subadmin_profile__created_by')
-            .prefetch_related('subadmin_profile__allowed_modules')
-        )
-        return Response(SubAdminListSerializer(users, many=True).data, status=status.HTTP_200_OK)
+        users = _manageable_subadmin_users(request.user).prefetch_related('subadmin_profile__allowed_modules')
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(users, request, view=self)
+        return paginator.get_paginated_response(SubAdminListSerializer(page, many=True).data)
 
 
 class UpdateSubAdminAccessView(APIView):
@@ -779,19 +876,20 @@ class UpdateSubAdminAccessView(APIView):
         tags=['Admin RBAC'],
         operation_description='Update allowed modules for a subadmin.',
     )
+    @transaction.atomic
     def patch(self, request, user_id):
         serializer = UpdateSubAdminModulesSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            profile = SubAdminProfile.objects.get(user_id=user_id)
+            profile = _manageable_subadmin_profiles(request.user).select_for_update().get(user_id=user_id)
         except SubAdminProfile.DoesNotExist:
             return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         modules = Module.objects.filter(name__in=serializer.validated_data['modules'])
         profile.allowed_modules.set(modules)
-        invalidate_user_session(profile.user_id)
-        clear_user_me_cache(profile.user_id)
+        transaction.on_commit(lambda: invalidate_user_session(profile.user_id))
+        transaction.on_commit(lambda: clear_user_me_cache(profile.user_id))
 
         return Response(
             {
@@ -810,14 +908,15 @@ class UpdateSubAdminRoleView(APIView):
         tags=['Admin RBAC'],
         operation_description='Update role for a subadmin user. Allowed roles: subadmin, sales, student.',
     )
+    @transaction.atomic
     def patch(self, request, user_id):
         serializer = UpdateSubAdminRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            user = User.objects.get(id=user_id)
+            user = _manageable_subadmin_users(request.user).select_for_update().get(id=user_id)
         except User.DoesNotExist:
-            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         if request.user.pk == user.pk and serializer.validated_data['role'] != 'superadmin':
             return Response(
@@ -828,8 +927,8 @@ class UpdateSubAdminRoleView(APIView):
         user.role = serializer.validated_data['role']
         user.save(update_fields=['role'])
 
-        invalidate_user_session(user.pk)
-        clear_user_me_cache(user.pk)
+        transaction.on_commit(lambda: invalidate_user_session(user.pk))
+        transaction.on_commit(lambda: clear_user_me_cache(user.pk))
 
         return Response(
             {
@@ -844,9 +943,10 @@ class ToggleSubAdminStatusView(APIView):
     permission_classes = [CanManageSubadmins]
 
     @swagger_auto_schema(tags=['Admin RBAC'], operation_description='Activate or deactivate a subadmin account.')
+    @transaction.atomic
     def patch(self, request, user_id):
         try:
-            user = User.objects.get(id=user_id, role='subadmin')
+            user = _manageable_subadmin_users(request.user).select_for_update().get(id=user_id, role='subadmin')
         except User.DoesNotExist:
             return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -866,8 +966,8 @@ class ToggleSubAdminStatusView(APIView):
             pass
 
         if not user.is_active:
-            invalidate_user_session(user.pk)
-            clear_user_me_cache(user.pk)
+            transaction.on_commit(lambda: invalidate_user_session(user.pk))
+            transaction.on_commit(lambda: clear_user_me_cache(user.pk))
 
         return Response(
             {
@@ -882,11 +982,15 @@ class DeleteSubAdminView(APIView):
     permission_classes = [CanManageSubadmins]
 
     @swagger_auto_schema(tags=['Admin RBAC'], operation_description='Delete a subadmin account.')
+    @transaction.atomic
     def delete(self, request, user_id):
         try:
-            user = User.objects.get(id=user_id, role='subadmin')
+            user = _manageable_subadmin_users(request.user).select_for_update().get(id=user_id, role='subadmin')
         except User.DoesNotExist:
             return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+        user_pk = user.pk
         user.delete()
+        transaction.on_commit(lambda: invalidate_user_session(user_pk))
+        transaction.on_commit(lambda: clear_user_me_cache(user_pk))
         return Response({'message': 'SubAdmin deleted.'}, status=status.HTTP_200_OK)
