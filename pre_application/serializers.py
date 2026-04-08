@@ -67,15 +67,16 @@ class PreApplicationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
+        active_queryset = PreApplication.objects
         instance = getattr(self, "instance", None)
 
         if instance:
-            if PreApplication.objects.filter(email=value).exclude(pk=instance.pk).exists():
+            if active_queryset.filter(email=value).exclude(pk=instance.pk).exists():
                 raise serializers.ValidationError(
                     "Application with this email already exists."
                 )
         else:
-            if PreApplication.objects.filter(email=value).exists():
+            if active_queryset.filter(email=value).exists():
                 raise serializers.ValidationError(
                     "Application with this email already exists."
                 )

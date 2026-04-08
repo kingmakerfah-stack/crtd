@@ -519,7 +519,7 @@ class PreApplicationAPITests(APITestCase):
             )
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertFalse(ReferalCode.objects.filter(student=pre_application).exists())
         mock_send_email.assert_not_called()
 
@@ -538,7 +538,7 @@ class PreApplicationAPITests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         pre_application.refresh_from_db()
         self.assertEqual(pre_application.status, "pending")
 
@@ -576,6 +576,42 @@ class PreApplicationAPITests(APITestCase):
             format="json",
         )
         self.assertEqual(superadmin_restore.status_code, status.HTTP_200_OK)
+
+    def test_default_manager_hides_archived_rows_but_all_objects_keeps_them(self):
+        pre_application = self.create_pre_application(email="manager-check@example.com")
+        pre_application.is_deleted = True
+        pre_application.save(update_fields=["is_deleted"])
+
+        self.assertFalse(PreApplication.objects.filter(pk=pre_application.pk).exists())
+        self.assertTrue(PreApplication.all_objects.filter(pk=pre_application.pk).exists())
+
+    def test_archived_email_can_be_reused_but_active_duplicate_is_rejected(self):
+        pre_application = self.create_pre_application(email="reuse@example.com")
+        pre_application.is_deleted = True
+        pre_application.save(update_fields=["is_deleted"])
+
+        reused_response = self.client.post(
+            reverse("pre-application-create"),
+            data=self.make_payload(
+                email="reuse@example.com",
+                whatsapp_no="+919876543216",
+                alternate_phone="+919876543217",
+            ),
+            format="json",
+        )
+        duplicate_active_response = self.client.post(
+            reverse("pre-application-create"),
+            data=self.make_payload(
+                email="reuse@example.com",
+                whatsapp_no="+919876543218",
+                alternate_phone="+919876543219",
+            ),
+            format="json",
+        )
+
+        self.assertEqual(reused_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(duplicate_active_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", duplicate_active_response.data)
 
 
 class EnquiryTokenMigrationTests(TransactionTestCase):

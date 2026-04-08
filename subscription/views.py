@@ -5,17 +5,19 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAdmin
+from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 
 from .models import SubscriptionPlan
 from .serializers import SubscriptionPlanSerializer
 
 
 class SubscriptionPlanAPIView(APIView):
+    required_module = 'membership'
+
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()]
-        return [IsAuthenticated(), IsAdmin()]
+        return [IsAdminPortalUser(), HasModuleAccess()]
 
     def get_object(self):
         plan = SubscriptionPlan.objects.first()

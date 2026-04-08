@@ -6,21 +6,20 @@ from django.db.models import Count, Q,Sum
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated,AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from admin_analytics.models import Testimonial,CompanyPartners
 from admin_analytics.pagination import TestimonialPagination
 from admin_analytics.serializers import ReferenceCodeStatusSerializer
+from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 from pre_application.models import PreApplication, ReferalCode
-from .permissions import IsAdminRole
 from datetime import timedelta
 from payments.models import Payment
 from jobs.models import Job
 from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer,CompanyPartnersSerializer
 
 class EnquiryAnalyticsView(APIView):
-
-    permission_classes = [IsAuthenticated,IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
     @swagger_auto_schema(security=[{"Bearer": []}],tags=["Admin Analytics"])
     def get(self, request):
 
@@ -50,8 +49,8 @@ class EnquiryAnalyticsView(APIView):
 
 
 class EnquiryTableView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'enquiry_form'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
@@ -74,8 +73,8 @@ class EnquiryTableView(APIView):
         return Response(data)
         
 class ReferenceCodeStatusView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'reference_code'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
@@ -118,8 +117,8 @@ class ReferenceCodeStatusView(APIView):
         })
 
 class UpdateReferenceStatusView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'reference_code'
 
     @swagger_auto_schema(request_body=UpdateReferenceStatusSerializer,
                          tags=["Admin Analytics"])
@@ -148,8 +147,8 @@ class UpdateReferenceStatusView(APIView):
 
         return Response(serializer.errors, status=400)
 class DeleteReferenceCodeView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'reference_code'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def delete(self, request, pk):
 
@@ -164,8 +163,8 @@ class DeleteReferenceCodeView(APIView):
 
 # Admin payment analytics view to calculate revenue
 class PaymentAnalyticsView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'payment'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
@@ -251,8 +250,8 @@ class PaymentAnalyticsView(APIView):
         return Response(data)
 
 class CreateTestimonialView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'web_update'
 
     @swagger_auto_schema(request_body=TestimonialSerializer,
                          tags=["Admin Analytics"])
@@ -271,8 +270,8 @@ class CreateTestimonialView(APIView):
         return Response(serializer.errors, status=400) 
 
 class TestimonialListView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'web_update'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
@@ -286,8 +285,8 @@ class TestimonialListView(APIView):
         return paginator.get_paginated_response(serializer.data) 
 
 class UpdateTestimonialView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'web_update'
 
     @swagger_auto_schema(request_body=TestimonialSerializer,
                          tags=["Admin Analytics"])
@@ -317,8 +316,8 @@ class UpdateTestimonialView(APIView):
         return Response(serializer.errors, status=400)
 
 class DeleteTestimonialView(APIView):
-
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'web_update'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def delete(self, request, pk):
 
@@ -336,7 +335,8 @@ class DeleteTestimonialView(APIView):
             "message": "Testimonial deleted successfully"
         })
 class UpdateCompanyPartnersView(APIView):
-    permission_classes =[IsAuthenticated,IsAdminRole]
+    permission_classes =[IsAdminPortalUser, HasModuleAccess]
+    required_module = 'web_update'
     
     @swagger_auto_schema(
         tags=["Admin Analytics"],
@@ -354,7 +354,8 @@ class UpdateCompanyPartnersView(APIView):
                         status=status.HTTP_200_OK)
 
 class CollaborationAnalyticsAPIView(APIView):
-    permission_classes = [IsAuthenticated,IsAdminRole]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'web_update'
     @swagger_auto_schema(
             tags=["Admin Analytics"],
             operation_description="Returns total company partners, job openings, and testimonials count"

@@ -1,5 +1,7 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
+from django.utils import timezone
 
 
 class EnquiryTokenSequence(models.Model):
@@ -7,6 +9,38 @@ class EnquiryTokenSequence(models.Model):
 
     def __str__(self):
         return f"Next enquiry token number: {self.next_value}"
+
+
+class PreApplicationQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_deleted=False)
+
+    def deleted(self):
+        return self.filter(is_deleted=True)
+
+    def with_referral(self):
+        return self.select_related("referal_codes")
+
+    def soft_delete(self, user=None, reason=None):
+        return self.update(
+            is_deleted=True,
+            deleted_at=models.functions.Now(),
+            deleted_by=user,
+            deleted_reason=reason or None,
+        )
+
+    def restore(self):
+        return self.update(
+            is_deleted=False,
+            deleted_at=None,
+            deleted_by=None,
+            deleted_reason=None,
+        )
+
+
+class ActivePreApplicationManager(models.Manager.from_queryset(PreApplicationQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().active()
 
 
 class PreApplication(models.Model):
@@ -55,9 +89,12 @@ class PreApplication(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    objects = ActivePreApplicationManager()
+    all_objects = models.Manager.from_queryset(PreApplicationQuerySet)()
+
     def save(self, *args, **kwargs):
         if self.pk:
-            original_token = type(self).objects.filter(pk=self.pk).values_list(
+            original_token = type(self).all_objects.filter(pk=self.pk).values_list(
                 "enquiry_token",
                 flat=True,
             ).first()
@@ -70,8 +107,46 @@ class PreApplication(models.Model):
 
         super().save(*args, **kwargs)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["email"], name="preapp_email_idx"),
+            models.Index(fields=["is_deleted"], name="preapp_deleted_idx"),
+            models.Index(fields=["created_at"], name="preapp_created_idx"),
+            models.Index(fields=["is_deleted", "created_at"], name="preapp_del_created_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["email"],
+                condition=Q(is_deleted=False),
+                name="uniq_active_preapp_email",
+            ),
+        ]
+
     def __str__(self):
         return f"{self.enquiry_token} - {self.first_name} {self.last_name}".strip()
+
+    def soft_delete(self, user=None, reason=None):
+        if self.is_deleted:
+            if reason is not None:
+                self.deleted_reason = reason or None
+                self.save(update_fields=["deleted_reason"])
+            return
+
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.deleted_by = user
+        self.deleted_reason = reason or None
+        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"])
+
+    def restore(self):
+        if not self.is_deleted:
+            return
+
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.deleted_reason = None
+        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"])
 
 
 class ReferalCode(models.Model):
@@ -107,6 +182,11 @@ class ReferalCode(models.Model):
     )
     is_used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status"], name="referral_status_idx"),
+        ]
 
     def __str__(self):
         return f"{self.code} -> {self.student.enquiry_token}"

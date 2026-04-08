@@ -4,12 +4,12 @@ from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.exceptions import NotFound
-from rest_framework.permissions import IsAuthenticated,AllowAny
+from rest_framework.permissions import IsAuthenticated
 from .models import Application,CoolDown
 from jobs.models import Job
 from django.db.models import Count,Q
 from drf_yasg.utils import swagger_auto_schema                                              
-from admin_panel.permissions import IsSuperuserOrAdminOrSubadmin
+from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 from .paginations import ApplicationPagination
 from .serializers import (ApplyJobSerializer,CoolDownSerializer,
                         StudentApplicationSerializer,
@@ -83,7 +83,8 @@ class ApplyJobView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class CoolDownUpdateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'job_applications'
     @swagger_auto_schema(
             tags=["Applications"],
             request_body = CoolDownSerializer,
@@ -105,7 +106,8 @@ class CoolDownUpdateView(APIView):
     
 # dashboard job summary
 class RealTimeActivitySummaryView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'job_applications'
 
     @swagger_auto_schema(
     responses={
@@ -137,7 +139,8 @@ class RealTimeActivitySummaryView(APIView):
 
 #role wise jobs view
 class JobWiseSummaryView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'job_applications'
 
     @swagger_auto_schema(
     responses={
@@ -167,7 +170,8 @@ class JobWiseSummaryView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class JobApplicationsView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'job_applications'
     @swagger_auto_schema(
     responses={
         200: "Job applications fetched successfully",
@@ -205,7 +209,8 @@ class JobApplicationsView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
 class ApplicationDetailView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'job_applications'
     @swagger_auto_schema(
     responses={
         200: "Application detail fetched successfully",
@@ -236,7 +241,8 @@ class ApplicationDetailView(APIView):
             
 #update interview status view
 class UpdateApplicationStatusView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'job_applications'
 
     @swagger_auto_schema(
         request_body=ApplicationStatusUpdateSerializer,  
@@ -275,7 +281,8 @@ class StudentApplicationListView(APIView):
         return Response(serializer.data)
 
 class UpdateStudentCoolDownView(APIView):
-    permission_classes = [IsSuperuserOrAdminOrSubadmin]
+    permission_classes = [IsAdminPortalUser, HasModuleAccess]
+    required_module = 'job_applications'
     @swagger_auto_schema(
     request_body=UpdateCoolDownSerializer,
     responses={

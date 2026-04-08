@@ -1,8 +1,11 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework.exceptions import AuthenticationFailed
+import logging
 
 from .utils import is_user_invalidated
+
+logger = logging.getLogger(__name__)
 
 
 class SessionAwareJWTAuthentication(JWTAuthentication):
@@ -28,6 +31,16 @@ class SessionAwareJWTAuthentication(JWTAuthentication):
 
     def get_user(self, validated_token):
         user = super().get_user(validated_token)
-        if is_user_invalidated(user.pk):
+        try:
+            invalidated = is_user_invalidated(user.pk)
+        except Exception:
+            logger.warning(
+                "Session invalidation check failed for user %s",
+                user.pk,
+                exc_info=True,
+            )
+            invalidated = False
+
+        if invalidated:
             raise InvalidToken('Session invalidated. Please log in again.')
         return user

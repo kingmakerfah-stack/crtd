@@ -31,7 +31,7 @@ def extract_enquiry_token_number(token):
 
 def _get_max_allocated_token_value():
     max_value = 0
-    for token in PreApplication.objects.values_list("enquiry_token", flat=True):
+    for token in PreApplication.all_objects.values_list("enquiry_token", flat=True):
         value = extract_enquiry_token_number(token)
         if value and value > max_value:
             max_value = value
@@ -76,23 +76,40 @@ def generate_unique_referral_code(length=8):
 
 
 def create_referral_for_pre_application(pre_application):
-    if pre_application.is_deleted:
-        raise ReferralGenerationError("Cannot generate referral for archived pre-application")
-
-    if pre_application.verified or ReferalCode.objects.filter(student=pre_application).exists():
-        raise ReferralGenerationError("Referral already exists for this student")
+    max_attempts = 5
 
     with transaction.atomic():
-        referral = ReferalCode.objects.create(
-            student=pre_application,
-            code=generate_unique_referral_code(),
+        locked_pre_application = (
+            PreApplication.all_objects.select_for_update()
+            .get(pk=pre_application.pk)
         )
-        pre_application.verified = True
-        pre_application.save(update_fields=["verified"])
+
+        if locked_pre_application.is_deleted:
+            raise ReferralGenerationError("Cannot generate referral for archived pre-application")
+
+        if (
+            locked_pre_application.verified
+            or ReferalCode.objects.select_for_update().filter(student=locked_pre_application).exists()
+        ):
+            raise ReferralGenerationError("Referral already exists for this student")
+
+        for _ in range(max_attempts):
+            try:
+                referral = ReferalCode.objects.create(
+                    student=locked_pre_application,
+                    code=generate_unique_referral_code(),
+                )
+                locked_pre_application.verified = True
+                locked_pre_application.save(update_fields=["verified"])
+                break
+            except IntegrityError:
+                continue
+        else:
+            raise ReferralGenerationError("Could not generate a unique referral code. Please retry.")
 
     context = {
-        "first_name": pre_application.first_name,
+        "first_name": locked_pre_application.first_name,
         "reference_code": referral.code,
     }
-    EmailService.send_approval_email(pre_application.email, context)
+    EmailService.send_approval_email(locked_pre_application.email, context)
     return referral

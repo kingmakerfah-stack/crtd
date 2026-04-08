@@ -1,19 +1,21 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import NotFound
+from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 from .models import Job
 from .serializers import JobSerializer,JobCardSerializer,JobDetailSerializer
 from .pagination import JobPagination
 from drf_yasg.utils import swagger_auto_schema
 
 class JobListCreateView(APIView):
+    required_module = 'web_update'
     
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [IsAdminPortalUser(), HasModuleAccess()]
     
     @swagger_auto_schema(
             responses={
@@ -65,10 +67,12 @@ class JobListCreateView(APIView):
 
 
 class JobDetailView(APIView):
+    required_module = 'web_update'
+
     def get_permissions(self):
         if self.request.method == "GET":
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [IsAdminPortalUser(), HasModuleAccess()]
     
     def get_object(self, pk):
         try:

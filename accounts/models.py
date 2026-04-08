@@ -47,7 +47,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     role = models.CharField(
         max_length=20,
-        choices=ROLE_CHOICES
+        choices=ROLE_CHOICES,
+        db_index=True,
     )
 
     is_active = models.BooleanField(default=True)
@@ -87,7 +88,7 @@ class EmailOTP(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='email_otps')
     otp = models.CharField(max_length=255) # Store hashed OTP
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    expires_at = models.DateTimeField(db_index=True)
     is_verified = models.BooleanField(default=False)
     purpose = models.CharField(
         max_length=30,
@@ -133,7 +134,7 @@ class Module(models.Model):
 
     name = models.CharField(max_length=50, unique=True, choices=MODULE_CHOICES)
     display_name = models.CharField(max_length=100)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     order = models.PositiveIntegerField(default=0)
 
     class Meta:

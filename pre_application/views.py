@@ -1,5 +1,6 @@
 ﻿from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
@@ -97,10 +98,30 @@ def _include_deleted_requested(request):
 
 
 def _filtered_preapplication_queryset(request):
-    queryset = PreApplication.objects.select_related("referal_codes").order_by("-created_at")
+    manager = PreApplication.objects
     if _include_deleted_requested(request) and _is_superadmin_user(request.user):
-        return queryset
-    return queryset.filter(is_deleted=False)
+        manager = PreApplication.all_objects
+    return manager.with_referral().order_by("-created_at")
+
+
+def _soft_delete_pre_application(pre_application, user, reason=None):
+    if not pre_application.is_deleted:
+        pre_application.is_deleted = True
+        pre_application.deleted_at = timezone.now()
+        pre_application.deleted_by = user
+
+    pre_application.deleted_reason = reason or None
+    pre_application.save(
+        update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"]
+    )
+
+
+def _restore_pre_application(pre_application):
+    pre_application.is_deleted = False
+    pre_application.deleted_at = None
+    pre_application.deleted_by = None
+    pre_application.deleted_reason = None
+    pre_application.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"])
 
 
 class PreApplicationCreateView(APIView):
@@ -408,12 +429,7 @@ class CreateReferralByEnquiryTokenAPIView(BaseCreateReferralAPIView):
     )
     def post(self, request, enquiry_token):
         token = enquiry_token.strip().upper()
-        pre_application = get_object_or_404(PreApplication, enquiry_token=token)
-        if pre_application.is_deleted:
-            return Response(
-                {"error": "Cannot generate referral for archived pre-application."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        pre_application = get_object_or_404(PreApplication.objects, enquiry_token=token)
         return self.create_referral_response(pre_application)
 
 
@@ -447,12 +463,7 @@ class CreateReferralAPIView(BaseCreateReferralAPIView):
         ),
     )
     def post(self, request, pk):
-        pre_application = get_object_or_404(PreApplication, pk=pk)
-        if pre_application.is_deleted:
-            return Response(
-                {"error": "Cannot generate referral for archived pre-application."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        pre_application = get_object_or_404(PreApplication.objects, pk=pk)
         return self.create_referral_response(pre_application)
 
 
@@ -474,20 +485,19 @@ class ArchivePreApplicationByEnquiryTokenAPIView(APIView):
             404: "Pre-application not found",
         },
     )
+    @transaction.atomic
     def patch(self, request, enquiry_token):
         token = enquiry_token.strip().upper()
-        pre_application = get_object_or_404(PreApplication, enquiry_token=token)
+        pre_application = get_object_or_404(
+            PreApplication.all_objects.select_for_update(),
+            enquiry_token=token,
+        )
         serializer = PreApplicationArchiveRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        if not pre_application.is_deleted:
-            pre_application.is_deleted = True
-            pre_application.deleted_at = timezone.now()
-            pre_application.deleted_by = request.user
-
-        pre_application.deleted_reason = serializer.validated_data.get("deleted_reason") or None
-        pre_application.save(
-            update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"]
+        _soft_delete_pre_application(
+            pre_application,
+            request.user,
+            serializer.validated_data.get("deleted_reason"),
         )
 
         return Response(
@@ -518,19 +528,18 @@ class ArchivePreApplicationAPIView(APIView):
             404: "Pre-application not found",
         },
     )
+    @transaction.atomic
     def patch(self, request, pk):
-        pre_application = get_object_or_404(PreApplication, pk=pk)
+        pre_application = get_object_or_404(
+            PreApplication.all_objects.select_for_update(),
+            pk=pk,
+        )
         serializer = PreApplicationArchiveRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        if not pre_application.is_deleted:
-            pre_application.is_deleted = True
-            pre_application.deleted_at = timezone.now()
-            pre_application.deleted_by = request.user
-
-        pre_application.deleted_reason = serializer.validated_data.get("deleted_reason") or None
-        pre_application.save(
-            update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"]
+        _soft_delete_pre_application(
+            pre_application,
+            request.user,
+            serializer.validated_data.get("deleted_reason"),
         )
 
         return Response(
@@ -560,14 +569,14 @@ class RestorePreApplicationByEnquiryTokenAPIView(APIView):
             404: "Pre-application not found",
         },
     )
+    @transaction.atomic
     def patch(self, request, enquiry_token):
         token = enquiry_token.strip().upper()
-        pre_application = get_object_or_404(PreApplication, enquiry_token=token)
-        pre_application.is_deleted = False
-        pre_application.deleted_at = None
-        pre_application.deleted_by = None
-        pre_application.deleted_reason = None
-        pre_application.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"])
+        pre_application = get_object_or_404(
+            PreApplication.all_objects.select_for_update(),
+            enquiry_token=token,
+        )
+        _restore_pre_application(pre_application)
 
         return Response(
             {
@@ -596,13 +605,13 @@ class RestorePreApplicationAPIView(APIView):
             404: "Pre-application not found",
         },
     )
+    @transaction.atomic
     def patch(self, request, pk):
-        pre_application = get_object_or_404(PreApplication, pk=pk)
-        pre_application.is_deleted = False
-        pre_application.deleted_at = None
-        pre_application.deleted_by = None
-        pre_application.deleted_reason = None
-        pre_application.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deleted_reason"])
+        pre_application = get_object_or_404(
+            PreApplication.all_objects.select_for_update(),
+            pk=pk,
+        )
+        _restore_pre_application(pre_application)
 
         return Response(
             {
@@ -645,7 +654,9 @@ class CheckReferralCodeAPIView(APIView):
     )
     def get(self, request, code):
         referral = get_object_or_404(
-            ReferalCode.objects.select_related("student").filter(student__is_deleted=False),
+            ReferalCode.objects.select_related("student").filter(
+                student_id__in=PreApplication.objects.values("pk")
+            ),
             code=code,
         )
         serializer = ReferralValidationResponseSerializer(referral.student)
