@@ -362,7 +362,9 @@ class CollaborationAnalyticsAPIView(APIView):
     )
     def get(self,request):
         partners,_=CompanyPartners.objects.get_or_create(id=1)
-        total_job_openings = Job.objects.count()
+        total_job_openings = Job.objects.aggregate(
+            total=Sum("total_vacancies")
+        )['total'] or 0
         testimonials = Testimonial.objects.count()
         
         data = {

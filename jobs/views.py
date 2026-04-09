@@ -19,7 +19,7 @@ class JobListCreateView(APIView):
     
     @swagger_auto_schema(
             responses={
-            200: JobSerializer(many=True),
+            200: JobCardSerializer(many=True),
         },
         tags=["Jobs"],
         operation_description="""
