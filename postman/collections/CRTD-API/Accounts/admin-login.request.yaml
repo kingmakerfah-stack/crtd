@@ -1,7 +1,7 @@
 $kind: http-request
 name: Admin Login
 method: POST
-url: '{{baseUrl}}/api/accounts/admin/login/'
+url: '{{baseUrl}}/api/admin/auth/login/'
 order: 8000
 headers:
   - key: Content-Type

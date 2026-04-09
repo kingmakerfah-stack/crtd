@@ -1,7 +1,7 @@
 $kind: http-request
 name: Admin Login Verify OTP
 method: POST
-url: '{{baseUrl}}/api/accounts/admin/login/verify-otp/'
+url: '{{baseUrl}}/api/admin/auth/verify-otp/'
 order: 9000
 headers:
   - key: Content-Type

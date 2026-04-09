@@ -1,4 +1,4 @@
-from django.urls import include, path
+from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterAPIView,
@@ -33,8 +33,5 @@ urlpatterns = [
 
     # Authenticated account settings password change
     path('change-password/', ChangePasswordView.as_view(), name='change_password'),
-
-    # Mirror RBAC routes here so name resolution works even if project URL wiring differs in CI.
-    path('admin/', include('accounts.admin_urls')),
 
 ]
