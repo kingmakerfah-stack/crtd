@@ -115,11 +115,7 @@ jobs:
             p/django
             p/secrets
             p/owasp-top-ten
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
-      # pip-audit — || true removed, now fails hard on vulnerabilities
-      # Previously this was silently passing even with critical CVEs
       - name: pip-audit
         run: pip-audit -r requirements.txt
 
