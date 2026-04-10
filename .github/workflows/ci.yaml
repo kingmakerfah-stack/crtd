@@ -73,6 +73,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required by TruffleHog to scan full git history
 
       - uses: actions/setup-python@v5
         with:
@@ -86,13 +88,21 @@ jobs:
       - name: Bandit
         run: |
           bandit -r . --exclude ./.venv,./venv,./env,./tests \
-          --severity-level medium --confidence-level medium || true
+          --severity-level medium --confidence-level medium
 
       - name: pip-audit
         run: |
           pip install -r requirements.txt
           pip install pip-audit
           pip-audit -r requirements.txt || true
+
+      - name: TruffleHog — Secrets Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: .
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
 
       - name: Trivy FS
         uses: aquasecurity/trivy-action@master
