@@ -106,7 +106,7 @@ jobs:
           name: bandit-report-${{ github.sha }}
           path: bandit-report.json
           retention-days: 30
-          
+
       - name: Semgrep SAST
         uses: semgrep/semgrep-action@v1
         with:
@@ -256,7 +256,7 @@ jobs:
     steps:
       - name: Fix permissions
         run: sudo chmod -R 777 ${{ github.workspace }}
-        
+
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
@@ -269,5 +269,45 @@ jobs:
         if: always()
         with:
           name: zap-report-backend-${{ github.sha }}
+          path: report_html.html
+          retention-days: 30
+
+  dast-staging:
+    name: staging_backend_url Scan (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+
+    steps:
+      - name: Fix permissions
+        run: sudo chmod -R 777 ${{ github.workspace }}
+
+      - name: OWASP ZAP — API Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: ${{ secrets.STAGING_BACKEND_URL }}
+          fail_action: true
+          cmd_options: "-a"
+
+      - name: Upload API ZAP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report-staging-api-${{ github.sha }}
+          path: report_html.html
+          retention-days: 30
+
+      - name: OWASP ZAP — Payments Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: ${{ secrets.STAGING_PAYMENTS_URL }}
+          fail_action: true
+          cmd_options: "-a"
+
+      - name: Upload Payments ZAP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report-staging-payments-${{ github.sha }}
           path: report_html.html
           retention-days: 30
