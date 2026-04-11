@@ -248,7 +248,7 @@ jobs:
             EOF
 
   dast-dev:
-    name: DAST Scan (Dev)
+    name: DEV_BACKEND_URL Scan (Dev)
     runs-on: ubuntu-latest
     needs: deploy-dev
     if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
