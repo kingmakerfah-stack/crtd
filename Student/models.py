@@ -41,7 +41,7 @@ class StudentPersonalDetail(models.Model):
     whatsapp_no = models.CharField(max_length=13, null=True, blank=True)
     alternate_phone = models.CharField(max_length=13, null=True, blank=True)
 
-    birthplace_state = models.CharField(max_length=100, null=True, blank=True)
+    birthplace_state = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=20, null=True, blank=True)
@@ -72,9 +72,9 @@ class StudentEducation(models.Model):
     specialization = models.CharField(max_length=100, null=True, blank=True)
 
     college_name = models.CharField(max_length=150, null=True, blank=True)
-    college_state = models.CharField(max_length=100, null=True, blank=True)
+    college_state = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 
-    passing_year = models.CharField(max_length=4, null=True, blank=True)
+    passing_year = models.CharField(max_length=4, null=True, blank=True, db_index=True)
 
     cgpa = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
 
