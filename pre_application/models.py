@@ -64,12 +64,12 @@ class PreApplication(models.Model):
     email = models.EmailField()
     whatsapp_no = models.CharField(max_length=13)
     alternate_phone = models.CharField(max_length=13, blank=True, null=True)
-    birthplace_state = models.CharField(max_length=100)
+    birthplace_state = models.CharField(max_length=100, db_index=True)
     qualification = models.CharField(max_length=100)
     specialization = models.CharField(max_length=100)
     college_name = models.CharField(max_length=150)
-    college_state = models.CharField(max_length=100)
-    passing_year = models.CharField(max_length=4)
+    college_state = models.CharField(max_length=100, db_index=True)
+    passing_year = models.CharField(max_length=4, db_index=True)
     preferred_time = models.CharField(max_length=50)
     status = models.CharField(
         max_length=20,
