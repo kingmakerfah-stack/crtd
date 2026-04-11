@@ -255,7 +255,7 @@ jobs:
 
     steps:
       - name: Fix permissions
-        run: sudo chmod -R 777 ${{ github.workspace }}
+        run: sudo chmod -R 1000:1000 ${{ github.workspace }}
 
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
@@ -280,7 +280,7 @@ jobs:
 
     steps:
       - name: Fix permissions
-        run: sudo chmod -R 777 ${{ github.workspace }}
+        run: sudo chmod -R 1000:1000 ${{ github.workspace }}
 
       - name: OWASP ZAP — API Scan
         uses: zaproxy/action-baseline@v0.12.0
