@@ -9,6 +9,7 @@ from .models import Application,CoolDown
 from jobs.models import Job
 from django.db.models import Count,Q
 from drf_yasg.utils import swagger_auto_schema                                              
+from accounts.access_control import filter_applications_for_user
 from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 from .paginations import ApplicationPagination
 from .serializers import (ApplyJobSerializer,CoolDownSerializer,
@@ -85,6 +86,7 @@ class ApplyJobView(APIView):
 class CoolDownUpdateView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'job_applications'
+    required_module_action = 'edit'
     @swagger_auto_schema(
             tags=["Applications"],
             request_body = CoolDownSerializer,
@@ -108,6 +110,7 @@ class CoolDownUpdateView(APIView):
 class RealTimeActivitySummaryView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'job_applications'
+    required_module_action = 'view'
 
     @swagger_auto_schema(
     responses={
@@ -124,8 +127,8 @@ class RealTimeActivitySummaryView(APIView):
     """
     )
     def get(self, request):
-
-        data = Application.objects.aggregate(
+        scoped_applications = filter_applications_for_user(request.user, Application.objects.all())
+        data = scoped_applications.aggregate(
             total_job_applied=Count("id"),
             interviews_pending=Count("id", filter=Q(status="pending")),
             interviews_completed=Count("id", filter=Q(status="selected")),
@@ -141,6 +144,7 @@ class RealTimeActivitySummaryView(APIView):
 class JobWiseSummaryView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'job_applications'
+    required_module_action = 'view'
 
     @swagger_auto_schema(
     responses={
@@ -157,7 +161,7 @@ class JobWiseSummaryView(APIView):
     """
     )
     def get(self, request):
-        queryset = Application.objects.values(
+        queryset = filter_applications_for_user(request.user, Application.objects.all()).values(
             'job__id',
             'job__job_role'
         ).annotate(
@@ -172,6 +176,7 @@ class JobWiseSummaryView(APIView):
 class JobApplicationsView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'job_applications'
+    required_module_action = 'view'
     @swagger_auto_schema(
     responses={
         200: "Job applications fetched successfully",
@@ -193,9 +198,9 @@ class JobApplicationsView(APIView):
         except Job.DoesNotExist:
             raise NotFound("Job not found.")
 
-        applications = Application.objects.filter(
+        applications = filter_applications_for_user(request.user, Application.objects.filter(
             job=job
-        ).select_related(
+        )).select_related(
             'job',
             'student__personal_detail',
             'student__career_preference',
@@ -211,6 +216,7 @@ class JobApplicationsView(APIView):
 class ApplicationDetailView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'job_applications'
+    required_module_action = 'view'
     @swagger_auto_schema(
     responses={
         200: "Application detail fetched successfully",
@@ -228,7 +234,7 @@ class ApplicationDetailView(APIView):
     )
     def get(self, request,id):
         try:
-            application = Application.objects.get(id=id)
+            application = filter_applications_for_user(request.user, Application.objects.all()).get(id=id)
         except Application.DoesNotExist:
             return Response(
                 {"message": "Application not found"},
@@ -243,6 +249,7 @@ class ApplicationDetailView(APIView):
 class UpdateApplicationStatusView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'job_applications'
+    required_module_action = 'edit'
 
     @swagger_auto_schema(
         request_body=ApplicationStatusUpdateSerializer,  
@@ -251,7 +258,7 @@ class UpdateApplicationStatusView(APIView):
     )
     def patch(self,request,id):
         try:
-            application = Application.objects.get(id=id)
+            application = filter_applications_for_user(request.user, Application.objects.all()).get(id=id)
         except Application.DoesNotExist:
             raise NotFound("Application not found.")
         serializer = ApplicationStatusUpdateSerializer(application,data=request.data,partial=True)  
@@ -283,6 +290,7 @@ class StudentApplicationListView(APIView):
 class UpdateStudentCoolDownView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'job_applications'
+    required_module_action = 'edit'
     @swagger_auto_schema(
     request_body=UpdateCoolDownSerializer,
     responses={
@@ -299,7 +307,7 @@ class UpdateStudentCoolDownView(APIView):
     )
     def patch(self,request,id):
         try:
-            application =Application.objects.get(id=id)
+            application = filter_applications_for_user(request.user, Application.objects.all()).get(id=id)
         except Application.DoesNotExist:
             raise NotFound("Application Not found.")
         

@@ -10,6 +10,7 @@ from drf_yasg.utils import swagger_auto_schema
 from admin_analytics.models import Testimonial,CompanyPartners
 from admin_analytics.pagination import TestimonialPagination
 from admin_analytics.serializers import ReferenceCodeStatusSerializer
+from accounts.access_control import filter_preapplications_for_user
 from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 from pre_application.models import PreApplication, ReferalCode
 from datetime import timedelta
@@ -20,10 +21,11 @@ from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer,
 class EnquiryAnalyticsView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'enquiry_form'
+    required_module_action = 'view'
     @swagger_auto_schema(security=[{"Bearer": []}],tags=["Admin Analytics"])
     def get(self, request):
-
-        analytics = PreApplication.objects.filter(is_deleted=False).aggregate(
+        enquiry_queryset = filter_preapplications_for_user(request.user, PreApplication.objects.all())
+        analytics = enquiry_queryset.aggregate(
             total_enquiry_received=Count("id"),
             today_received=Count(
                 "id",
@@ -31,7 +33,7 @@ class EnquiryAnalyticsView(APIView):
             ),
         )
 
-        enquiry_done = ReferalCode.objects.filter(student__is_deleted=False).count()
+        enquiry_done = ReferalCode.objects.filter(student__in=enquiry_queryset).count()
 
         pending_enquiry = max(
             analytics["total_enquiry_received"] - enquiry_done,
@@ -51,10 +53,10 @@ class EnquiryAnalyticsView(APIView):
 class EnquiryTableView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'enquiry_form'
+    required_module_action = 'view'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
-
-        enquiries = PreApplication.objects.filter(is_deleted=False)
+        enquiries = filter_preapplications_for_user(request.user, PreApplication.objects.all())
 
         data = []
 
@@ -75,22 +77,23 @@ class EnquiryTableView(APIView):
 class ReferenceCodeStatusView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'reference_code'
+    required_module_action = 'view'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
+        scoped_preapps = filter_preapplications_for_user(request.user, PreApplication.objects.all())
+        scoped_referrals = ReferalCode.objects.select_related("student").filter(student__in=scoped_preapps)
 
-        total_reference_code = ReferalCode.objects.filter(student__is_deleted=False).count()
+        total_reference_code = scoped_referrals.count()
 
-        account_not_created = ReferalCode.objects.filter(
+        account_not_created = scoped_referrals.filter(
             status="not_used",
-            student__is_deleted=False,
         ).count()
 
-        membership_not_completed = ReferalCode.objects.filter(
+        membership_not_completed = scoped_referrals.filter(
             status="membership_pending",
-            student__is_deleted=False,
         ).count()
 
-        queryset = ReferalCode.objects.select_related("student").filter(student__is_deleted=False)
+        queryset = scoped_referrals
 
         data = []
 
@@ -119,13 +122,14 @@ class ReferenceCodeStatusView(APIView):
 class UpdateReferenceStatusView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'reference_code'
+    required_module_action = 'edit'
 
     @swagger_auto_schema(request_body=UpdateReferenceStatusSerializer,
                          tags=["Admin Analytics"])
     def patch(self, request, pk):
 
         try:
-            ref = ReferalCode.objects.get(id=pk)
+            ref = ReferalCode.objects.get(id=pk, student__in=filter_preapplications_for_user(request.user, PreApplication.objects.all()))
         except ReferalCode.DoesNotExist:
             return Response({"error": "Reference code not found"}, status=404)
 
@@ -149,11 +153,12 @@ class UpdateReferenceStatusView(APIView):
 class DeleteReferenceCodeView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'reference_code'
+    required_module_action = 'edit'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def delete(self, request, pk):
 
         try:
-            ref = ReferalCode.objects.get(id=pk)
+            ref = ReferalCode.objects.get(id=pk, student__in=filter_preapplications_for_user(request.user, PreApplication.objects.all()))
         except ReferalCode.DoesNotExist:
             return Response({"error": "Not found"}, status=404)
 
@@ -165,6 +170,7 @@ class DeleteReferenceCodeView(APIView):
 class PaymentAnalyticsView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'payment'
+    required_module_action = 'view'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
@@ -252,6 +258,7 @@ class PaymentAnalyticsView(APIView):
 class CreateTestimonialView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'web_update'
+    required_module_action = 'edit'
 
     @swagger_auto_schema(request_body=TestimonialSerializer,
                          tags=["Admin Analytics"])
@@ -272,6 +279,7 @@ class CreateTestimonialView(APIView):
 class TestimonialListView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'web_update'
+    required_module_action = 'view'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def get(self, request):
 
@@ -287,6 +295,7 @@ class TestimonialListView(APIView):
 class UpdateTestimonialView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'web_update'
+    required_module_action = 'edit'
 
     @swagger_auto_schema(request_body=TestimonialSerializer,
                          tags=["Admin Analytics"])
@@ -318,6 +327,7 @@ class UpdateTestimonialView(APIView):
 class DeleteTestimonialView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'web_update'
+    required_module_action = 'edit'
     @swagger_auto_schema(tags=["Admin Analytics"])
     def delete(self, request, pk):
 
@@ -337,6 +347,7 @@ class DeleteTestimonialView(APIView):
 class UpdateCompanyPartnersView(APIView):
     permission_classes =[IsAdminPortalUser, HasModuleAccess]
     required_module = 'web_update'
+    required_module_action = 'edit'
     
     @swagger_auto_schema(
         tags=["Admin Analytics"],
@@ -356,6 +367,7 @@ class UpdateCompanyPartnersView(APIView):
 class CollaborationAnalyticsAPIView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'web_update'
+    required_module_action = 'view'
     @swagger_auto_schema(
             tags=["Admin Analytics"],
             operation_description="Returns total company partners, job openings, and testimonials count"

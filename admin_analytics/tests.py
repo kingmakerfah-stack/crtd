@@ -2,7 +2,13 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import Module, SubAdminProfile
+from accounts.models import (
+    Module,
+    SubAdminBirthStateScope,
+    SubAdminCollegeStateScope,
+    SubAdminPassingYearScope,
+    SubAdminProfile,
+)
 from pre_application.models import PreApplication
 
 
@@ -45,6 +51,9 @@ class AdminAnalyticsRBACTests(APITestCase):
 
         profile = SubAdminProfile.objects.create(user=self.subadmin, created_by=self.superadmin)
         profile.allowed_modules.set([self.enquiry_module, self.payment_module, self.web_update_module])
+        SubAdminBirthStateScope.objects.create(subadmin_profile=profile, state_name="Gujarat")
+        SubAdminCollegeStateScope.objects.create(subadmin_profile=profile, state_name="Gujarat")
+        SubAdminPassingYearScope.objects.create(subadmin_profile=profile, passing_year="2024")
         SubAdminProfile.objects.create(user=self.unassigned_subadmin, created_by=self.superadmin)
 
         PreApplication.objects.create(
