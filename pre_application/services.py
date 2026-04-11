@@ -75,7 +75,7 @@ def generate_unique_referral_code(length=8):
             return code
 
 
-def create_referral_for_pre_application(pre_application):
+def create_referral_for_pre_application(pre_application, created_by=None):
     max_attempts = 5
 
     with transaction.atomic():
@@ -98,6 +98,7 @@ def create_referral_for_pre_application(pre_application):
                 referral = ReferalCode.objects.create(
                     student=locked_pre_application,
                     code=generate_unique_referral_code(),
+                    admin=created_by,
                 )
                 locked_pre_application.verified = True
                 locked_pre_application.save(update_fields=["verified"])

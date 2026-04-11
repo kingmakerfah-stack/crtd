@@ -67,28 +67,45 @@ class PreApplicationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
+        normalized_email = value.strip().lower()
         active_queryset = PreApplication.objects
+        all_queryset = PreApplication.all_objects
         instance = getattr(self, "instance", None)
 
+        deleted_queryset = all_queryset.filter(email__iexact=normalized_email, is_deleted=True)
+
         if instance:
-            if active_queryset.filter(email=value).exclude(pk=instance.pk).exists():
+            deleted_queryset = deleted_queryset.exclude(pk=instance.pk)
+
+        if deleted_queryset.exists():
+            raise serializers.ValidationError(
+                "A deleted pre-application already exists for this email. Please ask admin to restore it."
+            )
+
+        if instance:
+            if active_queryset.filter(email__iexact=normalized_email).exclude(pk=instance.pk).exists():
                 raise serializers.ValidationError(
                     "Application with this email already exists."
                 )
         else:
-            if active_queryset.filter(email=value).exists():
+            if active_queryset.filter(email__iexact=normalized_email).exists():
                 raise serializers.ValidationError(
                     "Application with this email already exists."
                 )
 
-        return value
+        return normalized_email
 
 
 class ReferalCodeSerializer(serializers.ModelSerializer):
+    created_by_email = serializers.SerializerMethodField()
+
     class Meta:
         model = ReferalCode
-        fields = ["id", "student", "code", "status", "is_used", "created_at"]
-        read_only_fields = ["student", "code", "status", "is_used", "created_at"]
+        fields = ["id", "student", "code", "status", "is_used", "admin", "created_by_email", "created_at"]
+        read_only_fields = ["student", "code", "status", "is_used", "admin", "created_by_email", "created_at"]
+
+    def get_created_by_email(self, obj):
+        return obj.admin.email if obj.admin else None
 
 
 class PreApplicationLookupSerializer(serializers.ModelSerializer):
@@ -159,9 +176,30 @@ class PreApplicationAdminListSerializer(serializers.ModelSerializer):
 
 
 class PreApplicationStatusUpdateSerializer(serializers.ModelSerializer):
+    status = serializers.CharField()
+
     class Meta:
         model = PreApplication
         fields = ["status"]
+
+    def validate_status(self, value):
+        normalized = str(value).strip().lower().replace("_", " ")
+
+        status_aliases = {
+            "pending": PreApplication.STATUS_PENDING,
+            "completed": PreApplication.STATUS_COMPLETED,
+            "enquiry done": PreApplication.STATUS_COMPLETED,
+            "done": PreApplication.STATUS_COMPLETED,
+            "not interested": PreApplication.STATUS_NOT_INTERESTED,
+        }
+
+        mapped = status_aliases.get(normalized)
+        if not mapped:
+            raise serializers.ValidationError(
+                "Invalid status. Allowed values: pending, completed, not interested."
+            )
+
+        return mapped
 
 
 class PreApplicationArchiveRequestSerializer(serializers.Serializer):

@@ -159,6 +159,19 @@ class PreApplicationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], "pending")
 
+    def test_submit_form_blocks_email_if_deleted_record_exists(self):
+        archived = self.create_pre_application(email="archived@example.com")
+        archived.soft_delete(user=self.admin_user, reason="duplicate")
+
+        response = self.client.post(
+            reverse("pre-application-create"),
+            data=self.make_payload(email="archived@example.com"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("restore", str(response.data["email"]).lower())
+
     def test_enquiry_lookup_returns_expected_basic_details_for_admin(self):
         pre_application = self.create_pre_application()
         ReferalCode.objects.create(student=pre_application, code="AB12CD34")
@@ -382,6 +395,7 @@ class PreApplicationAPITests(APITestCase):
         referral = ReferalCode.objects.get(student=pre_application)
         self.assertTrue(pre_application.verified)
         self.assertEqual(response.data["code"], referral.code)
+        self.assertEqual(referral.admin_id, self.admin_user.id)
         mock_send_email.assert_called_once()
 
     @patch("pre_application.services.EmailService.send_approval_email")
@@ -397,6 +411,7 @@ class PreApplicationAPITests(APITestCase):
         pre_application.refresh_from_db()
         referral = ReferalCode.objects.get(student=pre_application)
         self.assertEqual(referral.student_id, pre_application.id)
+        self.assertEqual(referral.admin_id, self.admin_user.id)
         self.assertRegex(pre_application.enquiry_token, r"^ENQ\d{6}$")
         mock_send_email.assert_called_once()
 
@@ -490,6 +505,23 @@ class PreApplicationAPITests(APITestCase):
         self.assertEqual(superadmin_response.status_code, status.HTTP_200_OK)
         self.assertEqual(superadmin_response.data["status"], "not interested")
 
+        pre_application.refresh_from_db()
+        self.assertEqual(pre_application.status, "not interested")
+
+    def test_status_update_accepts_not_interested_alias_with_underscore(self):
+        pre_application = self.create_pre_application(email="status-alias@example.com")
+        self.client.force_authenticate(user=self.superadmin_user)
+
+        response = self.client.patch(
+            reverse(
+                "pre-application-by-enquiry-token",
+                args=[pre_application.enquiry_token],
+            ),
+            data={"status": "not_interested"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         pre_application.refresh_from_db()
         self.assertEqual(pre_application.status, "not interested")
 
@@ -669,12 +701,12 @@ class PreApplicationAPITests(APITestCase):
         self.assertFalse(PreApplication.objects.filter(pk=pre_application.pk).exists())
         self.assertTrue(PreApplication.all_objects.filter(pk=pre_application.pk).exists())
 
-    def test_archived_email_can_be_reused_but_active_duplicate_is_rejected(self):
+    def test_archived_email_cannot_be_reused_until_manual_restore(self):
         pre_application = self.create_pre_application(email="reuse@example.com")
         pre_application.is_deleted = True
         pre_application.save(update_fields=["is_deleted"])
 
-        reused_response = self.client.post(
+        blocked_response = self.client.post(
             reverse("pre-application-create"),
             data=self.make_payload(
                 email="reuse@example.com",
@@ -683,19 +715,9 @@ class PreApplicationAPITests(APITestCase):
             ),
             format="json",
         )
-        duplicate_active_response = self.client.post(
-            reverse("pre-application-create"),
-            data=self.make_payload(
-                email="reuse@example.com",
-                whatsapp_no="+919876543218",
-                alternate_phone="+919876543219",
-            ),
-            format="json",
-        )
 
-        self.assertEqual(reused_response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(duplicate_active_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("email", duplicate_active_response.data)
+        self.assertEqual(blocked_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("restore", str(blocked_response.data["email"]).lower())
 
     def test_subadmin_scope_limits_visible_preapplications(self):
         visible = self.create_pre_application(email="visible-scope@example.com")

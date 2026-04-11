@@ -5,6 +5,7 @@ from .models import EnquiryTokenSequence, PreApplication, ReferalCode
 from .services import ReferralGenerationError, create_referral_for_pre_application
 
 
+
 @admin.register(PreApplication)
 class PreApplicationAdmin(admin.ModelAdmin):
     list_display = (
@@ -23,6 +24,10 @@ class PreApplicationAdmin(admin.ModelAdmin):
     search_fields = ("enquiry_token", "first_name", "last_name", "email")
     actions = ["generate_referral_codes"]
 
+    def get_queryset(self, request):
+        # Show active + soft-deleted rows for audit and manual restore workflows.
+        return PreApplication.all_objects.select_related("deleted_by")
+
     @admin.action(description="Generate referral code for selected pre-applications")
     def generate_referral_codes(self, request, queryset):
         created_count = 0
@@ -30,7 +35,7 @@ class PreApplicationAdmin(admin.ModelAdmin):
 
         for pre_application in queryset:
             try:
-                create_referral_for_pre_application(pre_application)
+                create_referral_for_pre_application(pre_application, created_by=request.user)
                 created_count += 1
             except ReferralGenerationError:
                 skipped_count += 1
@@ -47,6 +52,15 @@ class PreApplicationAdmin(admin.ModelAdmin):
                 level=messages.WARNING,
             )
 
+@admin.register(ReferalCode)
+class ReferalCodeAdmin(admin.ModelAdmin):
+    list_display = ("code", "student", "status", "is_used", "created_by_email", "created_at")
+    list_filter = ("status", "is_used", "created_at")
+    search_fields = ("code", "student__enquiry_token", "student__email", "admin__email")
 
-admin.site.register(ReferalCode)
+    @admin.display(description="Created By")
+    def created_by_email(self, obj):
+        return obj.admin.email if obj.admin else "-"
+
+
 admin.site.register(EnquiryTokenSequence)

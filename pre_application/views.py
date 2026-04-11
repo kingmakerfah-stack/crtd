@@ -536,9 +536,9 @@ class BaseCreateReferralAPIView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
     required_module = 'reference_code'
 
-    def create_referral_response(self, pre_application):
+    def create_referral_response(self, request, pre_application):
         try:
-            referral = create_referral_for_pre_application(pre_application)
+            referral = create_referral_for_pre_application(pre_application, created_by=request.user)
         except ReferralGenerationError as exc:
             return Response(
                 {"error": str(exc)},
@@ -590,7 +590,7 @@ class CreateReferralByEnquiryTokenAPIView(BaseCreateReferralAPIView):
             _scoped_preapplication_queryset_for_write(request),
             enquiry_token=token,
         )
-        return self.create_referral_response(pre_application)
+        return self.create_referral_response(request, pre_application)
 
 
 class CreateReferralAPIView(BaseCreateReferralAPIView):
@@ -627,7 +627,7 @@ class CreateReferralAPIView(BaseCreateReferralAPIView):
             _scoped_preapplication_queryset_for_write(request),
             pk=pk,
         )
-        return self.create_referral_response(pre_application)
+        return self.create_referral_response(request, pre_application)
 
 
 class ArchivePreApplicationByEnquiryTokenAPIView(APIView):
