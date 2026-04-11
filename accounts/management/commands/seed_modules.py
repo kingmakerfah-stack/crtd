@@ -24,15 +24,25 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         created_count = 0
+        updated_count = 0
         for name, display_name, order in MODULES:
-            _, created = Module.objects.get_or_create(
+            module, created = Module.objects.update_or_create(
                 name=name,
-                defaults={'display_name': display_name, 'order': order},
+                defaults={
+                    'display_name': display_name,
+                    'order': order,
+                    'is_active': True,
+                },
             )
             if created:
                 created_count += 1
                 self.stdout.write(f'Created: {display_name}')
             else:
-                self.stdout.write(f'Exists: {display_name}')
+                updated_count += 1
+                self.stdout.write(f'Updated: {module.display_name}')
 
-        self.stdout.write(self.style.SUCCESS(f'Done. {created_count} new modules created.'))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'Done. Created: {created_count}, Updated: {updated_count}, Total defined: {len(MODULES)}.'
+            )
+        )

@@ -1,8 +1,25 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Module, SubAdminProfile
+from .access_control import get_profile_scope_values
+from .models import (
+    Module,
+    SubAdminModuleAccess,
+    SubAdminProfile,
+)
 
 User = get_user_model()
+
+
+MODULE_NAME_ALIASES = {
+    'subadmin': 'sub_admin',
+    'sub-admin': 'sub_admin',
+    'sub admin': 'sub_admin',
+}
+
+
+def normalize_module_name(value):
+    normalized = str(value).strip().lower()
+    return MODULE_NAME_ALIASES.get(normalized, normalized)
 
 
 class RoleBasedRegisterSerializer(serializers.ModelSerializer):
@@ -145,30 +162,111 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['name', 'display_name', 'order']
 
 
+class SubAdminModuleAccessInputSerializer(serializers.Serializer):
+    module = serializers.CharField()
+    can_view = serializers.BooleanField(default=True)
+    can_edit = serializers.BooleanField(default=False)
+
+    def validate_module(self, value):
+        module_name = normalize_module_name(value)
+        if not Module.objects.filter(name=module_name, is_active=True).exists():
+            raise serializers.ValidationError(f"Invalid module: {value}")
+        return module_name
+
+    def validate(self, attrs):
+        if attrs.get('can_edit'):
+            attrs['can_view'] = True
+        return attrs
+
+
+class SubAdminModuleAccessSerializer(serializers.ModelSerializer):
+    module = serializers.CharField(source='module.name')
+    display_name = serializers.CharField(source='module.display_name', read_only=True)
+
+    class Meta:
+        model = SubAdminModuleAccess
+        fields = ['module', 'display_name', 'can_view', 'can_edit']
+
+
 class CreateSubAdminSerializer(serializers.Serializer):
     email = serializers.EmailField()
     name = serializers.CharField(max_length=100)
     password = serializers.CharField(min_length=8, write_only=True)
-    modules = serializers.ListField(
-        child=serializers.CharField(),
-        allow_empty=False,
-    )
+    confirm_password = serializers.CharField(min_length=8, write_only=True)
+    role = serializers.ChoiceField(choices=['subadmin'], default='subadmin')
+    is_active = serializers.BooleanField(default=True)
+    account_access_start = serializers.DateTimeField(required=False, allow_null=True)
+    account_access_end = serializers.DateTimeField(required=False, allow_null=True)
+    module_accesses = SubAdminModuleAccessInputSerializer(many=True, required=False)
+    birth_states = serializers.ListField(child=serializers.CharField(), allow_empty=True, required=False)
+    college_states = serializers.ListField(child=serializers.CharField(), allow_empty=True, required=False)
+    passing_years = serializers.ListField(child=serializers.CharField(), allow_empty=True, required=False)
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError('Email already exists.')
         return value
 
-    def validate_modules(self, value):
-        valid = Module.objects.filter(name__in=value).values_list('name', flat=True)
-        invalid = set(value) - set(valid)
-        if invalid:
-            raise serializers.ValidationError(f'Invalid modules: {sorted(invalid)}')
-        return value
+    def validate_passing_years(self, value):
+        normalized = []
+        for year in value:
+            year_value = str(year).strip()
+            if not year_value.isdigit() or len(year_value) != 4:
+                raise serializers.ValidationError('Passing years must be 4-digit values.')
+            normalized.append(year_value)
+        return normalized
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
+
+        account_access_start = attrs.get('account_access_start')
+        account_access_end = attrs.get('account_access_end')
+        if account_access_start and account_access_end and account_access_start > account_access_end:
+            raise serializers.ValidationError('account_access_start must be before account_access_end.')
+
+        module_accesses = attrs.get('module_accesses') or []
+        if not module_accesses:
+            raise serializers.ValidationError('At least one module assignment is required.')
+
+        module_names = [item['module'] for item in module_accesses]
+        if len(module_names) != len(set(module_names)):
+            raise serializers.ValidationError('Duplicate module assignments are not allowed.')
+
+        return attrs
 
 
 class UpdateSubAdminModulesSerializer(serializers.Serializer):
-    modules = serializers.ListField(child=serializers.CharField())
+    is_active = serializers.BooleanField(required=False)
+    account_access_start = serializers.DateTimeField(required=False, allow_null=True)
+    account_access_end = serializers.DateTimeField(required=False, allow_null=True)
+    module_accesses = SubAdminModuleAccessInputSerializer(many=True, required=False)
+    birth_states = serializers.ListField(child=serializers.CharField(), allow_empty=True, required=False)
+    college_states = serializers.ListField(child=serializers.CharField(), allow_empty=True, required=False)
+    passing_years = serializers.ListField(child=serializers.CharField(), allow_empty=True, required=False)
+
+    def validate_passing_years(self, value):
+        normalized = []
+        for year in value:
+            year_value = str(year).strip()
+            if not year_value.isdigit() or len(year_value) != 4:
+                raise serializers.ValidationError('Passing years must be 4-digit values.')
+            normalized.append(year_value)
+        return normalized
+
+    def validate(self, attrs):
+        account_access_start = attrs.get('account_access_start')
+        account_access_end = attrs.get('account_access_end')
+        if account_access_start and account_access_end and account_access_start > account_access_end:
+            raise serializers.ValidationError('account_access_start must be before account_access_end.')
+
+        module_accesses = attrs.get('module_accesses') or []
+        if module_accesses:
+            module_names = [item['module'] for item in module_accesses]
+            if len(module_names) != len(set(module_names)):
+                raise serializers.ValidationError('Duplicate module assignments are not allowed.')
+
+        return attrs
 
 
 class UpdateSubAdminRoleSerializer(serializers.Serializer):
@@ -177,7 +275,13 @@ class UpdateSubAdminRoleSerializer(serializers.Serializer):
 
 class SubAdminListSerializer(serializers.ModelSerializer):
     allowed_modules = serializers.SerializerMethodField()
+    module_accesses = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
+    account_access_start = serializers.SerializerMethodField()
+    account_access_end = serializers.SerializerMethodField()
+    birth_states = serializers.SerializerMethodField()
+    college_states = serializers.SerializerMethodField()
+    passing_years = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -188,6 +292,12 @@ class SubAdminListSerializer(serializers.ModelSerializer):
             'is_active',
             'created_at',
             'allowed_modules',
+            'module_accesses',
+            'account_access_start',
+            'account_access_end',
+            'birth_states',
+            'college_states',
+            'passing_years',
             'created_by_name',
         ]
 
@@ -197,16 +307,59 @@ class SubAdminListSerializer(serializers.ModelSerializer):
         except SubAdminProfile.DoesNotExist:
             return []
 
+    def get_module_accesses(self, obj):
+        try:
+            accesses = obj.subadmin_profile.module_accesses.select_related('module').order_by('module__order', 'module__name')
+            return SubAdminModuleAccessSerializer(accesses, many=True).data
+        except SubAdminProfile.DoesNotExist:
+            return []
+
     def get_created_by_name(self, obj):
         try:
             return obj.subadmin_profile.created_by.name
         except (SubAdminProfile.DoesNotExist, AttributeError):
             return None
 
+    def get_account_access_start(self, obj):
+        try:
+            return obj.subadmin_profile.account_access_start
+        except SubAdminProfile.DoesNotExist:
+            return None
+
+    def get_account_access_end(self, obj):
+        try:
+            return obj.subadmin_profile.account_access_end
+        except SubAdminProfile.DoesNotExist:
+            return None
+
+    def get_birth_states(self, obj):
+        try:
+            return get_profile_scope_values(obj.subadmin_profile)['birth_states']
+        except SubAdminProfile.DoesNotExist:
+            return []
+
+    def get_college_states(self, obj):
+        try:
+            return get_profile_scope_values(obj.subadmin_profile)['college_states']
+        except SubAdminProfile.DoesNotExist:
+            return []
+
+    def get_passing_years(self, obj):
+        try:
+            return get_profile_scope_values(obj.subadmin_profile)['passing_years']
+        except SubAdminProfile.DoesNotExist:
+            return []
+
 
 class MeSerializer(serializers.ModelSerializer):
     allowed_modules = serializers.SerializerMethodField()
+    module_accesses = serializers.SerializerMethodField()
     can_manage_subadmins = serializers.SerializerMethodField()
+    account_access_start = serializers.SerializerMethodField()
+    account_access_end = serializers.SerializerMethodField()
+    birth_states = serializers.SerializerMethodField()
+    college_states = serializers.SerializerMethodField()
+    passing_years = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -217,6 +370,12 @@ class MeSerializer(serializers.ModelSerializer):
             'role',
             'is_superuser',
             'allowed_modules',
+            'module_accesses',
+            'account_access_start',
+            'account_access_end',
+            'birth_states',
+            'college_states',
+            'passing_years',
             'can_manage_subadmins',
         ]
 
@@ -224,9 +383,58 @@ class MeSerializer(serializers.ModelSerializer):
         if obj.role == 'superadmin':
             return list(Module.objects.filter(is_active=True).values_list('name', flat=True))
         try:
-            return obj.subadmin_profile.get_module_names()
+            return obj.subadmin_profile.get_module_names(current_only=True)
         except SubAdminProfile.DoesNotExist:
             return []
+
+    def get_module_accesses(self, obj):
+        if obj.role == 'superadmin':
+            return []
+        try:
+            accesses = obj.subadmin_profile.module_accesses.select_related('module').order_by('module__order', 'module__name')
+            return SubAdminModuleAccessSerializer(accesses, many=True).data
+        except SubAdminProfile.DoesNotExist:
+            return []
+
+    def get_birth_states(self, obj):
+        if obj.role == 'superadmin':
+            return []
+        try:
+            return get_profile_scope_values(obj.subadmin_profile)['birth_states']
+        except SubAdminProfile.DoesNotExist:
+            return []
+
+    def get_college_states(self, obj):
+        if obj.role == 'superadmin':
+            return []
+        try:
+            return get_profile_scope_values(obj.subadmin_profile)['college_states']
+        except SubAdminProfile.DoesNotExist:
+            return []
+
+    def get_passing_years(self, obj):
+        if obj.role == 'superadmin':
+            return []
+        try:
+            return get_profile_scope_values(obj.subadmin_profile)['passing_years']
+        except SubAdminProfile.DoesNotExist:
+            return []
+
+    def get_account_access_start(self, obj):
+        if obj.role == 'superadmin':
+            return None
+        try:
+            return obj.subadmin_profile.account_access_start
+        except SubAdminProfile.DoesNotExist:
+            return None
+
+    def get_account_access_end(self, obj):
+        if obj.role == 'superadmin':
+            return None
+        try:
+            return obj.subadmin_profile.account_access_end
+        except SubAdminProfile.DoesNotExist:
+            return None
 
     def get_can_manage_subadmins(self, obj):
         if obj.role == 'superadmin':
@@ -234,6 +442,6 @@ class MeSerializer(serializers.ModelSerializer):
         if obj.role != 'subadmin':
             return False
         try:
-            return obj.subadmin_profile.has_module_access('sub_admin')
+            return obj.subadmin_profile.has_module_access('sub_admin', action='edit')
         except SubAdminProfile.DoesNotExist:
             return False

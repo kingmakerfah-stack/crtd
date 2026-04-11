@@ -1,4 +1,5 @@
 from rest_framework.permissions import BasePermission
+from .access_control import has_admin_portal_access
 from .models import SubAdminProfile
 
 
@@ -45,6 +46,7 @@ class IsAdminPortalUser(BasePermission):
             request.user
             and request.user.is_authenticated
             and request.user.role in ('superadmin', 'subadmin', 'sales')
+            and has_admin_portal_access(request.user)
         )
 
 
@@ -71,10 +73,14 @@ class HasModuleAccess(BasePermission):
 
         if request.user.role in ('subadmin', 'sales'):
             required_module = getattr(view, 'required_module', None)
+            required_module_action = getattr(view, 'required_module_action', 'view')
             if not required_module:
                 return True
             try:
-                return request.user.subadmin_profile.has_module_access(required_module)
+                return request.user.subadmin_profile.has_module_access(
+                    required_module,
+                    action=required_module_action,
+                )
             except SubAdminProfile.DoesNotExist:
                 return False
 
@@ -96,6 +102,6 @@ class CanManageSubadmins(BasePermission):
             return False
 
         try:
-            return user.subadmin_profile.has_module_access('sub_admin')
+            return user.subadmin_profile.has_module_access('sub_admin', action='edit')
         except SubAdminProfile.DoesNotExist:
             return False

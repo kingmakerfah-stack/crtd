@@ -32,7 +32,18 @@ User = get_user_model()
 from pre_application.models import ReferalCode , PreApplication
 from rest_framework.generics import get_object_or_404
 from Student.models import Student, StudentPersonalDetail, StudentEducation, StudentCareerPreference
-from .models import Module, SubAdminProfile
+from .access_control import (
+    get_profile_scope_values,
+    has_admin_portal_access,
+)
+from .models import (
+    Module,
+    SubAdminBirthStateScope,
+    SubAdminCollegeStateScope,
+    SubAdminModuleAccess,
+    SubAdminPassingYearScope,
+    SubAdminProfile,
+)
 from .pagination import AccountsListPagination
 from .permissions import IsSuperAdmin, IsAdminPortalUser, CanManageSubadmins
 from .utils import (
@@ -63,6 +74,76 @@ def _manageable_subadmin_profiles(actor):
     if _is_superadmin(actor):
         return queryset.filter(user__role='subadmin')
     return queryset.filter(user__role='subadmin', created_by=actor)
+
+
+def _build_module_access_payload(validated_data):
+    return validated_data.get('module_accesses')
+
+
+def _replace_scope_rows(profile, model, field_name, values):
+    model.objects.filter(subadmin_profile=profile).delete()
+    rows = [
+        model(subadmin_profile=profile, **{field_name: value})
+        for value in values
+    ]
+    if rows:
+        model.objects.bulk_create(rows)
+
+
+def _apply_subadmin_access_configuration(profile, validated_data):
+    profile.is_active = validated_data.get('is_active', profile.is_active)
+    profile.account_access_start = validated_data.get('account_access_start', profile.account_access_start)
+    profile.account_access_end = validated_data.get('account_access_end', profile.account_access_end)
+    profile.user.is_active = profile.is_active
+    profile.user.save(update_fields=['is_active'])
+    profile.save(update_fields=['is_active', 'account_access_start', 'account_access_end'])
+
+    module_payload = _build_module_access_payload(validated_data)
+    if module_payload is not None:
+        module_names = [item['module'] for item in module_payload]
+        module_map = {
+            module.name: module
+            for module in Module.objects.filter(name__in=module_names)
+        }
+        SubAdminModuleAccess.objects.filter(subadmin_profile=profile).delete()
+        if module_payload:
+            SubAdminModuleAccess.objects.bulk_create([
+                SubAdminModuleAccess(
+                    subadmin_profile=profile,
+                    module=module_map[item['module']],
+                    can_view=True if item.get('can_edit', False) else item.get('can_view', True),
+                    can_edit=item.get('can_edit', False),
+                )
+                for item in module_payload
+            ])
+        allowed_modules = [
+            module_map[item['module']]
+            for item in module_payload
+            if item.get('can_view', True) or item.get('can_edit', False)
+        ]
+        profile.allowed_modules.set(allowed_modules)
+
+    if 'birth_states' in validated_data:
+        _replace_scope_rows(
+            profile,
+            SubAdminBirthStateScope,
+            'state_name',
+            validated_data.get('birth_states', []),
+        )
+    if 'college_states' in validated_data:
+        _replace_scope_rows(
+            profile,
+            SubAdminCollegeStateScope,
+            'state_name',
+            validated_data.get('college_states', []),
+        )
+    if 'passing_years' in validated_data:
+        _replace_scope_rows(
+            profile,
+            SubAdminPassingYearScope,
+            'passing_year',
+            validated_data.get('passing_years', []),
+        )
 
 
 class GoogleAuthView(APIView):
@@ -736,6 +817,9 @@ class RBACAdminLoginView(APIView):
         if not user.is_active:
             return Response({'error': 'Account is deactivated.'}, status=status.HTTP_403_FORBIDDEN)
 
+        if not has_admin_portal_access(user):
+            return Response({'error': 'Admin portal access is inactive or outside the allowed window.'}, status=status.HTTP_403_FORBIDDEN)
+
         EmailService.send_verification_otp(user, purpose='login_otp', otp_length=6)
         return Response({'message': 'OTP sent to your email.'}, status=status.HTTP_200_OK)
 
@@ -764,6 +848,9 @@ class RBACAdminOTPVerifyView(APIView):
 
         if not user.is_active:
             return Response({'error': 'Account is deactivated.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not has_admin_portal_access(user):
+            return Response({'error': 'Admin portal access is inactive or outside the allowed window.'}, status=status.HTTP_403_FORBIDDEN)
 
         result = EmailService.verify_otp(user, otp, purpose='login_otp')
         if not result['success']:
@@ -806,9 +893,9 @@ class ModuleListView(APIView):
     permission_classes = [CanManageSubadmins]
     pagination_class = AccountsListPagination
 
-    @swagger_auto_schema(tags=['Admin RBAC'], operation_description='List active modules for subadmin assignment.')
+    @swagger_auto_schema(tags=['Admin RBAC'], operation_description='List active modules for subadmin assignment. Use module names from this response in module_accesses payload.')
     def get(self, request):
-        modules = Module.objects.filter(is_active=True)
+        modules = Module.objects.filter(is_active=True).order_by('order', 'id')
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(modules, request, view=self)
         return paginator.get_paginated_response(ModuleSerializer(page, many=True).data)
@@ -820,7 +907,7 @@ class CreateSubAdminView(APIView):
     @swagger_auto_schema(
         request_body=CreateSubAdminSerializer,
         tags=['Admin RBAC'],
-        operation_description='Create a subadmin and assign module access.',
+        operation_description='Create a subadmin and assign module_accesses toggles. Each item supports module, can_view, can_edit (can_edit implies can_view).',
     )
     @transaction.atomic
     def post(self, request):
@@ -833,13 +920,18 @@ class CreateSubAdminView(APIView):
             user = User.objects.create_user(
                 email=data['email'],
                 password=data['password'],
-                role='subadmin',
+                role=data.get('role', 'subadmin'),
                 name=data['name'],
             )
 
-            profile = SubAdminProfile.objects.create(user=user, created_by=request.user)
-            modules = Module.objects.filter(name__in=data['modules'])
-            profile.allowed_modules.set(modules)
+            profile = SubAdminProfile.objects.create(
+                user=user,
+                created_by=request.user,
+                is_active=data.get('is_active', True),
+                account_access_start=data.get('account_access_start'),
+                account_access_end=data.get('account_access_end'),
+            )
+            _apply_subadmin_access_configuration(profile, data)
         except IntegrityError:
             transaction.set_rollback(True)
             return Response(
@@ -852,9 +944,34 @@ class CreateSubAdminView(APIView):
                 'message': 'SubAdmin created successfully.',
                 'user_id': user.id,
                 'assigned_modules': profile.get_module_names(),
+                'account_access_start': profile.account_access_start,
+                'account_access_end': profile.account_access_end,
+                'birth_states': get_profile_scope_values(profile)['birth_states'],
+                'college_states': get_profile_scope_values(profile)['college_states'],
+                'passing_years': get_profile_scope_values(profile)['passing_years'],
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class SubAdminDetailView(APIView):
+    permission_classes = [CanManageSubadmins]
+
+    @swagger_auto_schema(tags=['Admin RBAC'], operation_description='Get a subadmin with module toggle permissions and data-scope rules.')
+    def get(self, request, user_id):
+        user = get_object_or_404(
+            _manageable_subadmin_users(request.user)
+            .select_related('subadmin_profile__created_by')
+            .prefetch_related(
+                'subadmin_profile__allowed_modules',
+                'subadmin_profile__module_accesses__module',
+                'subadmin_profile__birth_state_scopes',
+                'subadmin_profile__college_state_scopes',
+                'subadmin_profile__passing_year_scopes',
+            ),
+            id=user_id,
+        )
+        return Response(SubAdminListSerializer(user).data, status=status.HTTP_200_OK)
 
 
 class ListSubAdminsView(APIView):
@@ -866,7 +983,13 @@ class ListSubAdminsView(APIView):
         users = (
             _manageable_subadmin_users(request.user)
             .select_related('subadmin_profile__created_by')
-            .prefetch_related('subadmin_profile__allowed_modules')
+            .prefetch_related(
+                'subadmin_profile__allowed_modules',
+                'subadmin_profile__module_accesses__module',
+                'subadmin_profile__birth_state_scopes',
+                'subadmin_profile__college_state_scopes',
+                'subadmin_profile__passing_year_scopes',
+            )
         )
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(users, request, view=self)
@@ -879,7 +1002,7 @@ class UpdateSubAdminAccessView(APIView):
     @swagger_auto_schema(
         request_body=UpdateSubAdminModulesSerializer,
         tags=['Admin RBAC'],
-        operation_description='Update allowed modules for a subadmin.',
+        operation_description='Update module_accesses toggles for a subadmin. Send module, can_view, can_edit per module (can_edit implies can_view).',
     )
     @transaction.atomic
     def patch(self, request, user_id):
@@ -891,15 +1014,19 @@ class UpdateSubAdminAccessView(APIView):
         except SubAdminProfile.DoesNotExist:
             return Response({'error': 'SubAdmin not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        modules = Module.objects.filter(name__in=serializer.validated_data['modules'])
-        profile.allowed_modules.set(modules)
+        _apply_subadmin_access_configuration(profile, serializer.validated_data)
         transaction.on_commit(lambda: invalidate_user_session(profile.user_id))
         transaction.on_commit(lambda: clear_user_me_cache(profile.user_id))
 
         return Response(
             {
-                'message': 'Modules updated.',
+                'message': 'SubAdmin access updated.',
                 'updated_modules': profile.get_module_names(),
+                'account_access_start': profile.account_access_start,
+                'account_access_end': profile.account_access_end,
+                'birth_states': get_profile_scope_values(profile)['birth_states'],
+                'college_states': get_profile_scope_values(profile)['college_states'],
+                'passing_years': get_profile_scope_values(profile)['passing_years'],
             },
             status=status.HTTP_200_OK,
         )

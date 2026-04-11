@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import CustomUser, EmailOTP, Module, SubAdminProfile
+from accounts.models import CustomUser, EmailOTP, Module, SubAdminModuleAccess, SubAdminProfile
 from accounts.utils import clear_user_invalidation, get_tokens_for_user, invalidate_user_session, is_user_invalidated
 from pre_application.models import PreApplication, ReferalCode
 from utils.email_service import EmailService
@@ -261,7 +261,7 @@ class RBACAdminPortalTests(APITestCase):
 		self.client.force_authenticate(self.superadmin)
 		response = self.client.patch(
 			reverse('rbac-subadmin-update-access', args=[self.subadmin.id]),
-			{'modules': ['dashboard']},
+			{'module_accesses': [{'module': 'dashboard', 'can_view': True, 'can_edit': False}]},
 			format='json',
 		)
 
@@ -389,7 +389,12 @@ class RBACAdminPortalTests(APITestCase):
 		self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
 
 	def test_subadmin_with_sub_admin_module_can_manage_subadmins(self):
-		self.subadmin.subadmin_profile.allowed_modules.add(self.module_subadmin)
+		SubAdminModuleAccess.objects.create(
+			subadmin_profile=self.subadmin.subadmin_profile,
+			module=self.module_subadmin,
+			can_view=True,
+			can_edit=True,
+		)
 		self.client.force_authenticate(self.subadmin)
 
 		list_response = self.client.get(reverse('rbac-subadmin-list'))
@@ -399,7 +404,12 @@ class RBACAdminPortalTests(APITestCase):
 				'email': 'managed-sub@example.com',
 				'name': 'Managed Sub',
 				'password': 'ManagedSubPass@123',
-				'modules': ['dashboard'],
+				'confirm_password': 'ManagedSubPass@123',
+				'is_active': True,
+				'module_accesses': [{'module': 'dashboard', 'can_view': True, 'can_edit': False}],
+				'birth_states': ['Maharashtra'],
+				'college_states': ['Maharashtra'],
+				'passing_years': ['2026'],
 			},
 			format='json',
 		)
@@ -410,7 +420,7 @@ class RBACAdminPortalTests(APITestCase):
 		new_user_id = create_response.data['user_id']
 		update_response = self.client.patch(
 			reverse('rbac-subadmin-update-access', args=[new_user_id]),
-			{'modules': ['analytics']},
+			{'module_accesses': [{'module': 'analytics', 'can_view': True, 'can_edit': False}]},
 			format='json',
 		)
 		delete_response = self.client.delete(reverse('rbac-subadmin-delete', args=[new_user_id]))
@@ -419,7 +429,12 @@ class RBACAdminPortalTests(APITestCase):
 		self.assertEqual(delete_response.status_code, status.HTTP_200_OK)
 
 	def test_subadmin_with_module_only_lists_owned_subadmins(self):
-		self.subadmin.subadmin_profile.allowed_modules.add(self.module_subadmin)
+		SubAdminModuleAccess.objects.create(
+			subadmin_profile=self.subadmin.subadmin_profile,
+			module=self.module_subadmin,
+			can_view=True,
+			can_edit=True,
+		)
 		owned = CustomUser.objects.create_user(
 			email='owned-sub@example.com',
 			password='OwnedPass@123',
@@ -454,7 +469,12 @@ class RBACAdminPortalTests(APITestCase):
 			self.assertFalse(is_user_invalidated(self.subadmin.pk))
 
 	def test_subadmin_cannot_update_access_for_unmanaged_subadmin(self):
-		self.subadmin.subadmin_profile.allowed_modules.add(self.module_subadmin)
+		SubAdminModuleAccess.objects.create(
+			subadmin_profile=self.subadmin.subadmin_profile,
+			module=self.module_subadmin,
+			can_view=True,
+			can_edit=True,
+		)
 		other_superadmin = CustomUser.objects.create_user(
 			email='other-superadmin@example.com',
 			password='OtherSuperPass@123',
@@ -472,11 +492,55 @@ class RBACAdminPortalTests(APITestCase):
 		self.client.force_authenticate(self.subadmin)
 		response = self.client.patch(
 			reverse('rbac-subadmin-update-access', args=[external_subadmin.id]),
-			{'modules': ['dashboard']},
+			{'module_accesses': [{'module': 'dashboard', 'can_view': True, 'can_edit': False}]},
 			format='json',
 		)
 
 		self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+	def test_create_subadmin_requires_confirm_password_and_persists_scope(self):
+		self.client.force_authenticate(self.superadmin)
+		response = self.client.post(
+			reverse('rbac-subadmin-create'),
+			{
+				'email': 'scoped-subadmin@example.com',
+				'name': 'Scoped Subadmin',
+				'password': 'ScopedPass@123',
+				'confirm_password': 'ScopedPass@123',
+				'is_active': False,
+				'account_access_start': '2026-01-01T00:00:00Z',
+				'account_access_end': '2026-12-31T23:59:59Z',
+				'module_accesses': [
+					{
+						'module': 'dashboard',
+						'can_view': True,
+						'can_edit': False,
+					}
+				],
+				'birth_states': ['Maharashtra'],
+				'college_states': ['Karnataka'],
+				'passing_years': ['2026'],
+			},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		created_user = CustomUser.objects.get(email='scoped-subadmin@example.com')
+		self.assertFalse(created_user.is_active)
+		self.assertEqual(created_user.subadmin_profile.birth_state_scopes.count(), 1)
+		self.assertEqual(created_user.subadmin_profile.module_accesses.count(), 1)
+
+	def test_subadmin_without_edit_toggle_cannot_manage_subadmins(self):
+		SubAdminModuleAccess.objects.create(
+			subadmin_profile=self.subadmin.subadmin_profile,
+			module=self.module_subadmin,
+			can_view=True,
+			can_edit=False,
+		)
+
+		self.client.force_authenticate(self.subadmin)
+		response = self.client.get(reverse('rbac-module-list'))
+		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class RegistrationFlowTests(APITestCase):
@@ -535,12 +599,19 @@ class RegistrationFlowTests(APITestCase):
 		self.assertEqual(mock_send_otp.call_count, 1)
 
 	def test_me_ignores_superuser_flag_for_subadmin_capabilities(self):
+		creator = CustomUser.objects.create_user(
+			email='creator@example.com',
+			password='CreatorPass@123',
+			role='superadmin',
+			name='Creator',
+		)
 		subadmin = CustomUser.objects.create_user(
 			email='flagged-subadmin@example.com',
 			password='FlaggedPass@123',
 			role='subadmin',
 			name='Flagged Subadmin',
 		)
+		SubAdminProfile.objects.create(user=subadmin, created_by=creator)
 		subadmin.is_superuser = True
 		subadmin.save(update_fields=['is_superuser'])
 
