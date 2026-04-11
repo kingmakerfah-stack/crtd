@@ -1,15 +1,23 @@
 import re
 from unittest.mock import patch
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import Module, SubAdminProfile
+from accounts.models import (
+    Module,
+    SubAdminBirthStateScope,
+    SubAdminCollegeStateScope,
+    SubAdminPassingYearScope,
+    SubAdminProfile,
+)
 from .models import PreApplication, ReferalCode
 
 
@@ -76,6 +84,9 @@ class PreApplicationAPITests(APITestCase):
             created_by=self.superadmin_user,
         )
         admin_profile.allowed_modules.set([self.module_enquiry, self.module_reference_code])
+        SubAdminBirthStateScope.objects.create(subadmin_profile=admin_profile, state_name="Gujarat")
+        SubAdminCollegeStateScope.objects.create(subadmin_profile=admin_profile, state_name="Gujarat")
+        SubAdminPassingYearScope.objects.create(subadmin_profile=admin_profile, passing_year="2024")
 
         subadmin_profile = SubAdminProfile.objects.create(
             user=self.subadmin_user,
@@ -189,6 +200,79 @@ class PreApplicationAPITests(APITestCase):
         self.assertIn("passing_year", first_item)
         self.assertIn("preferred_time", first_item)
         self.assertIn("status", first_item)
+
+    def test_admin_list_widget_and_drilldown_filters_work_together(self):
+        completed_today = self.create_pre_application(email="completed-today@example.com")
+        completed_today.status = PreApplication.STATUS_COMPLETED
+        completed_today.save(update_fields=["status"])
+
+        completed_old = self.create_pre_application(
+            email="completed-old@example.com",
+            first_name="Old",
+            last_name="Completed",
+            whatsapp_no="+919876543220",
+            alternate_phone="+919876543221",
+        )
+        completed_old.status = PreApplication.STATUS_COMPLETED
+        completed_old.save(update_fields=["status"])
+        old_date = timezone.now() - timedelta(days=5)
+        PreApplication.all_objects.filter(pk=completed_old.pk).update(created_at=old_date)
+
+        not_interested = self.create_pre_application(
+            email="not-interested@example.com",
+            first_name="Not",
+            last_name="Interested",
+            whatsapp_no="+919876543222",
+            alternate_phone="+919876543223",
+        )
+        not_interested.status = PreApplication.STATUS_NOT_INTERESTED
+        not_interested.save(update_fields=["status"])
+
+        self.client.force_authenticate(user=self.admin_user)
+
+        widget_response = self.client.get(
+            reverse("pre-application-list"),
+            {
+                "widget": "enquiry_done",
+                "search": "completed",
+            },
+        )
+        self.assertEqual(widget_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(widget_response.data["count"], 2)
+
+        date_response = self.client.get(
+            reverse("pre-application-list"),
+            {
+                "widget": "enquiry_done",
+                "date_from": timezone.localdate().isoformat(),
+            },
+        )
+        self.assertEqual(date_response.status_code, status.HTTP_200_OK)
+        tokens = {item["enquiry_token"] for item in date_response.data["results"]}
+        self.assertEqual(tokens, {completed_today.enquiry_token})
+
+        not_interested_response = self.client.get(
+            reverse("pre-application-list"),
+            {"widget": "not_interested"},
+        )
+        self.assertEqual(not_interested_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(not_interested_response.data["count"], 1)
+        self.assertEqual(
+            not_interested_response.data["results"][0]["enquiry_token"],
+            not_interested.enquiry_token,
+        )
+
+    def test_admin_list_rejects_invalid_widget_filter(self):
+        self.create_pre_application()
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(
+            reverse("pre-application-list"),
+            {"widget": "enquiry_completed"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Invalid widget", response.data["error"])
 
     def test_admin_lookup_by_email_returns_specific_preapplication(self):
         pre_application = self.create_pre_application()
@@ -612,6 +696,25 @@ class PreApplicationAPITests(APITestCase):
         self.assertEqual(reused_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(duplicate_active_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("email", duplicate_active_response.data)
+
+    def test_subadmin_scope_limits_visible_preapplications(self):
+        visible = self.create_pre_application(email="visible-scope@example.com")
+        hidden = self.create_pre_application(
+            email="hidden-scope@example.com",
+            birthplace_state="Maharashtra",
+            college_state="Karnataka",
+            passing_year="2026",
+            whatsapp_no="+919876543220",
+            alternate_phone="+919876543221",
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get(reverse("pre-application-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tokens = {item["enquiry_token"] for item in response.data["results"]}
+        self.assertIn(visible.enquiry_token, tokens)
+        self.assertNotIn(hidden.enquiry_token, tokens)
 
 
 class EnquiryTokenMigrationTests(TransactionTestCase):
