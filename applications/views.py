@@ -19,9 +19,10 @@ from .serializers import (ApplyJobSerializer,CoolDownSerializer,
                         UpdateCoolDownSerializer,
                         ApplicationDetailSerializer
                           )
+from accounts.permissions import IsActiveSubscriber
 
 class ApplyJobView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsActiveSubscriber]
 
     @swagger_auto_schema(
             tags=["Applications"],

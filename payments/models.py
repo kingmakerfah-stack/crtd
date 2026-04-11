@@ -27,7 +27,6 @@ class Payment(models.Model):
         
     ]
 
-    # user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
 
@@ -38,12 +37,14 @@ class Payment(models.Model):
         
     )
 
-
     razorpay_order_id = models.CharField(max_length=255, unique=True)
+
     razorpay_payment_id = models.CharField(max_length=255, unique=True, blank=True, null=True)
+
     razorpay_signature = models.TextField(null=True, blank=True)
 
     amount = models.IntegerField()
+
     currency = models.CharField(max_length=10, default="INR")
 
     status = models.CharField(
@@ -53,9 +54,11 @@ class Payment(models.Model):
     )
 
     subscription_start = models.DateTimeField(null=True, blank=True)
+
     subscription_end = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     # is_active = models.BooleanField(default=False)
@@ -72,6 +75,7 @@ class Payment(models.Model):
 
         self.status = "paid"
         self.save()
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -110,6 +114,7 @@ class PaymentHistory(models.Model):
         blank=True
     )
     user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
     transaction_id = models.CharField(
         max_length=20,
         unique=True,
@@ -118,16 +123,23 @@ class PaymentHistory(models.Model):
     
     
     amount = models.DecimalField(max_digits=6, decimal_places=2)
+
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+
     payment_status = models.CharField(
         max_length=20,
         choices=PAYMENT_STATUS_CHOICES,
         default='pending',
     )
+
     razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True)
+
     registration_date = models.DateTimeField(auto_now_add=True)
+
     end_date = models.DateTimeField(blank=True, null=True)
+
     membership_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
     payment_details = models.TextField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
@@ -141,3 +153,36 @@ class PaymentHistory(models.Model):
 
     def __str__(self):
         return f"{self.transaction_id} - {self.user_id}"
+
+
+#models for the students subscription functionality
+class StudentPayment(models.Model):
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    razorpay_order_id = models.CharField(max_length=255, unique=True)
+    razorpay_payment_id = models.CharField(max_length=255, null=True, blank=True)
+    razorpay_signature = models.TextField(null=True, blank=True)
+
+    amount = models.IntegerField()
+    status = models.CharField(max_length=20, default="CREATED")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class StudentSubscription(models.Model):
+    student = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    payment = models.ForeignKey(StudentPayment, on_delete=models.CASCADE)
+
+    registration_number = models.CharField(max_length=20, unique=True, null=True, blank=True)
+
+    status = models.CharField(max_length=20, default="ACTIVE")
+
+    payment_date = models.DateField(null=True, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+
+    renewed_at = models.DateTimeField(auto_now=True)
+
+
+class RegistrationSequence(models.Model):
+    year = models.IntegerField(unique=True)
+    last_number = models.IntegerField(default=0)

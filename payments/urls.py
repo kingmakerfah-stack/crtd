@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import create_order, verify_payment, razorpay_webhook,payment_test_page,PaymentHistoryListView,payment_failed
+from .views import create_order, verify_payment, razorpay_webhook,payment_test_page,PaymentHistoryListView,payment_failed,StudentPaymentInitiateView,StudentSubscriptionView
 
 
 
@@ -22,5 +22,10 @@ urlpatterns = [
 
     # Payment history endpoints
     path("payment-history/", PaymentHistoryListView.as_view(), name="payment-history"),
+
+
+
+    path('student/payment/initiate/', StudentPaymentInitiateView.as_view(), name="student_payment_initiate"),
+    path('student/subscription/', StudentSubscriptionView.as_view(), name="student_subscription"),
 
 ]
