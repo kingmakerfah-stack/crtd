@@ -258,6 +258,7 @@ jobs:
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: ${{ secrets.DEV_BACKEND_URL }}
+          docker_args: "--user root"
           fail_action: true
           cmd_options: "-a"
 
