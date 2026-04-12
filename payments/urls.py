@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import create_order, verify_payment, razorpay_webhook,payment_test_page,PaymentHistoryListView,payment_failed,StudentPaymentInitiateView,StudentSubscriptionView
+from .views import create_order, verify_payment, payment_test_page,PaymentHistoryListView,payment_failed,StudentSubscriptionView
+# from .views import razorpay_webhook
 
 
 
@@ -9,7 +10,7 @@ urlpatterns = [
     #verify payment urls 
     path("verify-payment/", verify_payment, name="verify_payment"),
     #razorpay webhook urls for the payment status update
-    path("webhook/", razorpay_webhook, name="razorpay_webhook"),
+    # path("webhook/", razorpay_webhook, name="razorpay_webhook"),
 
     #payment failed endpoint to hanlde the payment failure and update the payment status to gfailed int db
 
@@ -21,11 +22,7 @@ urlpatterns = [
     path("pay/", payment_test_page, name="payment_test_page"),
 
     # Payment history endpoints
-    path("payment-history/", PaymentHistoryListView.as_view(), name="payment-history"),
-
-
-
-    path('student/payment/initiate/', StudentPaymentInitiateView.as_view(), name="student_payment_initiate"),
+    path("payment-history/", PaymentHistoryListView.as_view(), name="payment-history"),    
     path('student/subscription/', StudentSubscriptionView.as_view(), name="student_subscription"),
 
 ]

@@ -21,7 +21,7 @@ from django.db import transaction
 from .utils import expire_old_payments, generate_registration_number
 from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
-from .models import PaymentHistory,StudentPayment,StudentSubscription,Payment
+from .models import PaymentHistory,StudentSubscription,Payment
 from .serializers import PaymentHistorySerializer
 from .pagination import PaymentPagination
 from rest_framework.permissions import IsAdminUser
@@ -45,6 +45,9 @@ User = get_user_model()
 @permission_classes([IsAuthenticated])
 # @permission_classes([AllowAny])
 def create_order(request):
+    # if not request.user.profile_completed:
+    #     return Response({"error": "Complete profile first"}, status=400)
+    
 
     expire_old_payments() 
 
@@ -109,7 +112,7 @@ def create_order(request):
     })
 
 
-
+#wel will comment out  this when for the deployment for the future because the webhook is required for the production and the payment status registration number is handled by the webhook itself not by the verify payment 
 # Verify Payment
 @swagger_auto_schema(
     method="post",
@@ -173,6 +176,50 @@ def verify_payment(request):
             payment.razorpay_signature = signature
             payment.activate_subscription()
 
+
+
+
+            #---------------------------
+            # remove this section for the production once the webhook is working fine
+
+            from dateutil.relativedelta import relativedelta
+
+            subscription = StudentSubscription.objects.filter(student=payment.user).first()
+
+            if not subscription:
+                subscription = StudentSubscription.objects.create(
+                    student=payment.user,
+                    payment=payment,
+                    )
+
+            # 🔥 Generate registration number (ONLY ONCE)
+            if not subscription.registration_number:
+                reg_no = generate_registration_number()
+                subscription.registration_number = reg_no
+                logger.info(f"🔥 Generated Registration: {reg_no}")
+
+            today = date.today()
+
+            subscription.payment = payment
+
+            subscription.status = "ACTIVE"
+
+            subscription.payment_date = today
+
+            # ✅ SAFE DURATION LOGIC
+            duration = payment.plan.duration_months if payment.plan else 6
+
+            subscription.expiry_date = today + relativedelta(
+                months=duration
+                )
+
+            subscription.save()
+
+            logger.info("🔥 Subscription ACTIVATED")
+
+
+            #_______________________
+
             
             # payment.save()
 
@@ -231,229 +278,199 @@ def verify_payment(request):
 
 
 
-# # Razorpay Webhook
-# @swagger_auto_schema(
-#     method="post",
-#     tags=["Payments"],
-#     operation_description="Handle Razorpay webhook events and update payment status.",
-# )
-# @api_view(["POST"])
-# @permission_classes([AllowAny])
-# def razorpay_webhook(request):
-
-#     body = request.body
-#     signature = request.headers.get("X-Razorpay-Signature")
-
-#     if not signature:
-#         return Response({"error": "Signature missing"}, status=400)
-    
-#     #  Verify webhook signature
-#     generated_signature = hmac.new(
-#         settings.RAZORPAY_WEBHOOK_SECRET.encode(),
-#         body,
-#         hashlib.sha256
-#     ).hexdigest()
-
-#     # Verify webhook authenticity
-#     if not hmac.compare_digest(generated_signature, signature):
-#         return Response({"error": "Invalid signature"}, status=400)
-
-#     data = json.loads(body)
-#     event = data.get("event")
-
-#     try:
-#         with transaction.atomic():
-
-#             payment_entity = data["payload"]["payment"]["entity"]
-#             payment_id = payment_entity.get("id")
-#             order_id = payment_entity.get("order_id")
-#             method = payment_entity.get("method", "unknown")
-
-#             payment = Payment.objects.select_for_update().filter(razorpay_order_id=order_id).first()
-
-#             if not payment:
-#                 return Response({"error": "Payment not found"}, status=404)
-
-            
-#             # SUCCESS CASE
-            
-#             if event == "payment.captured":
-
-#                 if payment.status != "paid":
-#                     payment.razorpay_payment_id = payment_id
-#                     payment.activate_subscription()
-#                     # return Response({"message": "Already processed"})
-
-#                 if not PaymentHistory.objects.filter(
-#                     razorpay_payment_id=payment_id
-#                 ).exists():
-
-                
-
-#                     PaymentHistory.objects.create(
-#                         payment=payment,
-#                         user=payment.user,
-#                         amount=payment.amount / 100,
-#                         payment_method=method,
-#                         payment_status="completed",
-#                         razorpay_payment_id=payment_id,
-#                         payment_details="Webhook success"
-#                     )
-
-            
-#             #  FAILURE CASE
-            
-#             elif event == "payment.failed":
-
-#                 #  Only update if not already successful
-#                 if payment.status != "paid":
-#                     payment.status = "failed"
-#                     payment.razorpay_payment_id = payment_id
-#                     payment.save()
-
-#                 #  Always log failure (but avoid duplicate)
-#                 if not PaymentHistory.objects.filter(
-#                     razorpay_payment_id=payment_id
-#                 ).exists():
-
-#                     PaymentHistory.objects.create(
-#                         payment=payment,
-#                         user=payment.user,
-#                         amount=payment.amount / 100,
-#                         payment_method=method,
-#                         payment_status="failed",
-#                         razorpay_payment_id=payment_id,
-#                         payment_details="Webhook failure"
-#                     )
-
-
-#     except Payment.DoesNotExist:
-#         return Response({"error": "Payment not found"}, status=404)
-
-#     return Response({"status": "Webhook processed"})
-
-
-
-
-#  Razorpay Webhook
+""""
 @swagger_auto_schema(
     method="post",
     tags=["Payments"],
-    operation_description="Handle Razorpay webhook events and update payment status.",
+    operation_description="Verify Razorpay payment signature (light fallback).",
+)
+@csrf_exempt
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verify_payment(request):
+
+    client = get_razorpay_client()
+
+    payment_id = request.data.get("razorpay_payment_id")
+    order_id = request.data.get("razorpay_order_id")
+    signature = request.data.get("razorpay_signature")
+
+    if not payment_id or not order_id or not signature:
+        return Response({"error": "Missing payment parameters"}, status=400)
+
+    params = {
+        "razorpay_payment_id": payment_id,
+        "razorpay_order_id": order_id,
+        "razorpay_signature": signature
+    }
+
+    try:
+        # ✅ Only verify signature (NO business logic here)
+        client.utility.verify_payment_signature(params)
+
+        return Response({
+            "message": "Payment verified (awaiting webhook confirmation)"
+        })
+
+    except razorpay.errors.SignatureVerificationError:
+        return Response({"error": "Payment verification failed"}, status=400)
+
+    except Exception as e:
+        logger.error(f"Verify error: {str(e)}")
+        return Response({"error": "Internal server error"}, status=500)
+
+# #we will make this comment out  and the verify payment old method for the production process 
+# # #Razorpay webhook to handle the payment status
+@swagger_auto_schema(
+    method="post",
+    tags=["Payments"],
+    operation_description="Handle Razorpay webhook events and update payment + subscription.",
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @csrf_exempt
 def razorpay_webhook(request):
+    print("🔥 WEBHOOK HIT")
+
     payload = request.body
     signature = request.headers.get("X-Razorpay-Signature")
 
-    # 🔐 Step 1: Verify signature
+    # 🔐 Step 1: Verify webhook signature
+    razorpay_client = get_razorpay_client()
+
     try:
         razorpay_client.utility.verify_webhook_signature(
             payload, signature, settings.RAZORPAY_WEBHOOK_SECRET
         )
     except Exception as e:
-        print("❌ Invalid signature:", str(e))
+        logger.error(f"❌ Invalid webhook signature: {str(e)}")
         return HttpResponse(status=400)
 
     data = json.loads(payload)
     event = data.get("event")
 
-    # Only handle relevant events
+    # ================================
+    # ✅ PAYMENT SUCCESS
+    # ================================
     if event == "payment.captured":
-        entity = data["payload"]["payment"]["entity"]
-        order_id = entity["order_id"]
-        payment_id = entity["id"]
-
-        print("✅ Payment Captured:", order_id)
-
-        # ================================
-        # 🔵 OLD PAYMENT FLOW
-        # ================================
         try:
-            old_payment = Payment.objects.get(razorpay_order_id=order_id)
+            entity = data["payload"]["payment"]["entity"]
+            order_id = entity["order_id"]
+            payment_id = entity["id"]
 
-            if old_payment.status != "SUCCESS":
-                old_payment.status = "SUCCESS"
-                old_payment.razorpay_payment_id = payment_id
-                old_payment.save()
+            logger.info(f"✅ Payment Captured: {order_id}")
 
-                print("✅ Old payment updated")
+            with transaction.atomic():
+
+                payment = Payment.objects.select_for_update().get(
+                    razorpay_order_id=order_id
+                )
+
+                # 🔁 Idempotency check
+                if payment.status == "paid":
+                    logger.info("⚠️ Payment already processed")
+                    return HttpResponse(status=200)
+
+                # ✅ Update payment
+                payment.status = "paid"
+                payment.razorpay_payment_id = payment_id
+                payment.save()
+
+                logger.info("✅ Payment marked as paid")
+
+                # ================================
+                # 🔥 SUBSCRIPTION LOGIC
+                # ================================
+                from dateutil.relativedelta import relativedelta
+
+                subscription = StudentSubscription.objects.filter(
+                    student=payment.user
+                ).first()
+
+                if not subscription:
+                    subscription = StudentSubscription.objects.create(
+                        student=payment.user,
+                        payment=payment
+                    )
+
+                # 🔥 Generate registration number (ONLY ONCE)
+                if not subscription.registration_number:
+                    reg_no = generate_registration_number()
+                    subscription.registration_number = reg_no
+                    logger.info(f"🔥 Generated Registration: {reg_no}")
+
+                today = date.today()
+
+                subscription.payment = payment
+                subscription.status = "ACTIVE"
+                subscription.payment_date = today
+                # ✅ SAFE DURATION LOGIC
+                duration = payment.plan.duration_months if payment.plan else 6
+
+                subscription.expiry_date = today + relativedelta(
+                    months=duration
+                )
+
+                subscription.save()
+
+                logger.info("🔥 Subscription ACTIVATED")
+
+
+                 # ================================
+                # 📜 PAYMENT HISTORY
+                # ================================
+                if not PaymentHistory.objects.filter(
+                    razorpay_payment_id=payment_id
+                ).exists():
+
+                    method = entity.get("method", "unknown")
+
+                    PaymentHistory.objects.create(
+                        payment=payment,
+                        user=payment.user,
+                        amount=payment.amount / 100,
+                        payment_method=method,
+                        payment_status="completed",
+                        razorpay_payment_id=payment_id,
+                        payment_details=f"Subscription Plan: {payment.plan.name if payment.plan else 'N/A'}"
+                    )
 
         except Payment.DoesNotExist:
-            print("ℹ️ Not an old payment")
+            logger.warning(f"⚠️ Payment not found: {order_id}")
+            return HttpResponse(status=404)
 
-        # ================================
-        # 🟢 NEW STUDENT FLOW
-        # ================================
-        try:
-            student_payment = StudentPayment.objects.select_for_update().get(
-                razorpay_order_id=order_id
-            )
+        except Exception as e:
+            logger.error(f"❌ Webhook error: {str(e)}")
+            return HttpResponse(status=500)
 
-            if student_payment.status == "SUCCESS":
-                return HttpResponse(status=200)  # idempotent
-
-            student_payment.status = "SUCCESS"
-            student_payment.razorpay_payment_id = payment_id
-            student_payment.save()
-
-            from .utils import generate_registration_number
-            from datetime import date
-            from dateutil.relativedelta import relativedelta
-
-            subscription, _ = StudentSubscription.objects.get_or_create(
-                student=student_payment.student
-            )
-
-            if not subscription.registration_number:
-                subscription.registration_number = generate_registration_number()
-
-            today = date.today()
-
-            subscription.payment = student_payment
-            subscription.status = "ACTIVE"
-            subscription.payment_date = today
-            subscription.expiry_date = today + relativedelta(
-                months=settings.SUBSCRIPTION_DURATION_MONTHS
-            )
-            subscription.save()
-
-            print("✅ Student subscription activated")
-
-        except StudentPayment.DoesNotExist:
-            print("ℹ️ Not a student payment")
 
     # ================================
-    # ❌ HANDLE FAILURE
+    # ❌ PAYMENT FAILED
     # ================================
     elif event == "payment.failed":
-        entity = data["payload"]["payment"]["entity"]
-        order_id = entity["order_id"]
-
-        print("❌ Payment Failed:", order_id)
-
-        # OLD
         try:
-            old_payment = Payment.objects.get(razorpay_order_id=order_id)
-            old_payment.status = "FAILED"
-            old_payment.save()
-        except Payment.DoesNotExist:
-            pass
+            entity = data["payload"]["payment"]["entity"]
+            order_id = entity["order_id"]
+            payment_id = entity.get("id")
 
-        # NEW
-        try:
-            student_payment = StudentPayment.objects.get(
+            logger.info(f"❌ Payment Failed: {order_id}")
+
+            payment = Payment.objects.filter(
                 razorpay_order_id=order_id
-            )
-            student_payment.status = "FAILED"
-            student_payment.save()
-        except StudentPayment.DoesNotExist:
-            pass
+            ).first()
+
+            if payment and payment.status != "paid":
+                payment.status = "failed"
+                payment.razorpay_payment_id = payment_id
+                payment.save()
+
+                logger.info("❌ Payment marked as failed")
+
+        except Exception as e:
+            logger.error(f"❌ Error processing payment.failed: {str(e)}")
 
     return HttpResponse(status=200)
-
+"""
 
 
 #views for the payment failure
@@ -515,102 +532,13 @@ class PaymentHistoryListView(ListAPIView):
 
 
 
-# CREATE STUDENT PAYMENT INITIATE API
-
-# @api_view(["POST"])
-class StudentPaymentInitiateView(APIView):
-    permission_classes = [IsAuthenticated]
-
-
-    def post(self, request):
-        user = request.user
-
-        if not user.profile_completed:
-            return Response({"error": "Complete profile first"}, status=400)
-
-        if StudentSubscription.objects.filter(student=user, status="ACTIVE").exists():
-            return Response({"error": "Already subscribed"}, status=400)
-
-        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-
-        order = client.order.create({
-            "amount": settings.SUBSCRIPTION_AMOUNT_PAISE,
-            "currency": "INR",
-            "payment_capture": 1
-        })
-
-        StudentPayment.objects.create(
-            student=user,
-            razorpay_order_id=order["id"],
-            amount=settings.SUBSCRIPTION_AMOUNT_PAISE
-        )
-
-        return Response({
-            "order_id": order["id"],
-            "amount": settings.SUBSCRIPTION_AMOUNT_PAISE,
-            "key": settings.RAZORPAY_KEY_ID
-        })
-    
-
-# #CREATE WEBHOOK FOR THE STUDENT PAYMENT AND SUBSCRIPTION ACTIVATION
-
-# @csrf_exempt
-# def student_payment_webhook(request):
-#     payload = request.body
-#     signature = request.headers.get("X-Razorpay-Signature")
-
-#     try:
-#         razorpay_client.utility.verify_webhook_signature(
-#             payload, signature, settings.RAZORPAY_WEBHOOK_SECRET
-#         )
-#     except:
-#         return HttpResponse(status=400)
-
-#     data = json.loads(payload)
-
-#     if data["event"] == "payment.captured":
-#         entity = data["payload"]["payment"]["entity"]
-
-#         order_id = entity["order_id"]
-#         payment_id = entity["id"]
-
-#         payment = StudentPayment.objects.select_for_update().get(
-#             razorpay_order_id=order_id
-#         )
-
-#         if payment.status == "SUCCESS":
-#             return HttpResponse(status=200)
-
-#         payment.status = "SUCCESS"
-#         payment.razorpay_payment_id = payment_id
-#         payment.save()
-
-#         subscription, _ = StudentSubscription.objects.get_or_create(
-#             student=payment.student
-#         )
-
-#         if not subscription.registration_number:
-#             subscription.registration_number = generate_registration_number()
-
-#         today = date.today()
-
-#         subscription.payment = payment
-#         subscription.status = "ACTIVE"
-#         subscription.payment_date = today
-#         subscription.expiry_date = today + relativedelta(
-#             months=settings.SUBSCRIPTION_DURATION_MONTHS
-#         )
-#         subscription.save()
-
-#     return HttpResponse(status=200)
-
 
 # CREATE SUBSCRIPTION API
 
 class StudentSubscriptionView(APIView):
     permission_classes = [IsAuthenticated]
 
-    
+
 
     def get(self, request):
         try:

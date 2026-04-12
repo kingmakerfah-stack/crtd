@@ -50,7 +50,8 @@ class Payment(models.Model):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default="created"
+        default="created",
+        db_index=True,
     )
 
     subscription_start = models.DateTimeField(null=True, blank=True)
@@ -155,29 +156,20 @@ class PaymentHistory(models.Model):
         return f"{self.transaction_id} - {self.user_id}"
 
 
-#models for the students subscription functionality
-class StudentPayment(models.Model):
-    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    razorpay_order_id = models.CharField(max_length=255, unique=True)
-    razorpay_payment_id = models.CharField(max_length=255, null=True, blank=True)
-    razorpay_signature = models.TextField(null=True, blank=True)
-
-    amount = models.IntegerField()
-    status = models.CharField(max_length=20, default="CREATED")
-
-    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class StudentSubscription(models.Model):
     student = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    payment = models.ForeignKey(StudentPayment, on_delete=models.CASCADE)
+
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE)
 
     registration_number = models.CharField(max_length=20, unique=True, null=True, blank=True)
 
-    status = models.CharField(max_length=20, default="ACTIVE")
+    status = models.CharField(max_length=20, default="ACTIVE",db_index=True)
 
     payment_date = models.DateField(null=True, blank=True)
+
     expiry_date = models.DateField(null=True, blank=True)
 
     renewed_at = models.DateTimeField(auto_now=True)
