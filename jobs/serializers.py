@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Job
+from .models import Job, Testimonial
 
 class JobSerializer(serializers.ModelSerializer):
     class Meta:
@@ -50,6 +50,34 @@ class JobDetailSerializer(serializers.ModelSerializer):
             "job_description",
             "skills_required",
             "eligibility",
+        ]
+
+
+class TestimonialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Testimonial
+        fields = [
+            "id",
+            "name",
+            "profile",
+            "feedback",
+            "rating",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class PublicTestimonialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Testimonial
+        fields = [
+            "id",
+            "name",
+            "profile",
+            "feedback",
+            "rating",
         ]
 
    

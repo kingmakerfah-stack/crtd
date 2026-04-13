@@ -4,9 +4,15 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import NotFound
 from accounts.permissions import HasModuleAccess, IsAdminPortalUser
-from .models import Job
-from .serializers import JobSerializer,JobCardSerializer,JobDetailSerializer
-from .pagination import JobPagination
+from .models import Job, Testimonial
+from .serializers import (
+    JobSerializer,
+    JobCardSerializer,
+    JobDetailSerializer,
+    TestimonialSerializer,
+    PublicTestimonialSerializer,
+)
+from .pagination import JobPagination, TestimonialPagination
 from drf_yasg.utils import swagger_auto_schema
 
 class JobListCreateView(APIView):
@@ -170,4 +176,110 @@ class JobDetailView(APIView):
     def delete(self, request, pk):
         job = self.get_object(pk)
         job.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PublicTestimonialListView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        responses={200: PublicTestimonialSerializer(many=True)},
+        tags=["Jobs"],
+        operation_description="Return published testimonials for public homepage consumption.",
+    )
+    def get(self, request):
+        testimonials = Testimonial.objects.filter(
+            status=Testimonial.STATUS_PUBLISHED
+        ).order_by("-created_at")
+        serializer = PublicTestimonialSerializer(testimonials, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AdminTestimonialListCreateView(APIView):
+    required_module = "web_update"
+
+    def get_permissions(self):
+        return [IsAdminPortalUser(), HasModuleAccess()]
+
+    @swagger_auto_schema(
+        responses={200: TestimonialSerializer(many=True)},
+        tags=["Jobs"],
+        operation_description="Get all testimonials for admin panel management.",
+    )
+    def get(self, request):
+        queryset = Testimonial.objects.all().order_by("-created_at")
+        paginator = TestimonialPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = TestimonialSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @swagger_auto_schema(
+        request_body=TestimonialSerializer,
+        responses={201: TestimonialSerializer, 400: "Validation Error"},
+        tags=["Jobs"],
+        operation_description="Create a testimonial from admin panel.",
+    )
+    def post(self, request):
+        serializer = TestimonialSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AdminTestimonialDetailView(APIView):
+    required_module = "web_update"
+
+    def get_permissions(self):
+        return [IsAdminPortalUser(), HasModuleAccess()]
+
+    def get_object(self, pk):
+        try:
+            return Testimonial.objects.get(pk=pk)
+        except Testimonial.DoesNotExist:
+            raise NotFound("Testimonial not found")
+
+    @swagger_auto_schema(
+        responses={200: TestimonialSerializer, 404: "Testimonial not found"},
+        tags=["Jobs"],
+        operation_description="Get a testimonial by id for admin workflows.",
+    )
+    def get(self, request, pk):
+        testimonial = self.get_object(pk)
+        serializer = TestimonialSerializer(testimonial)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        request_body=TestimonialSerializer,
+        responses={200: TestimonialSerializer, 400: "Validation Error", 404: "Testimonial not found"},
+        tags=["Jobs"],
+        operation_description="Fully update a testimonial (all required fields expected).",
+    )
+    def put(self, request, pk):
+        testimonial = self.get_object(pk)
+        serializer = TestimonialSerializer(testimonial, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        request_body=TestimonialSerializer,
+        responses={200: TestimonialSerializer, 400: "Validation Error", 404: "Testimonial not found"},
+        tags=["Jobs"],
+        operation_description="Partially update testimonial fields (supports status/rating/profile changes).",
+    )
+    def patch(self, request, pk):
+        testimonial = self.get_object(pk)
+        serializer = TestimonialSerializer(testimonial, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        responses={204: "Testimonial deleted", 404: "Testimonial not found"},
+        tags=["Jobs"],
+        operation_description="Delete a testimonial.",
+    )
+    def delete(self, request, pk):
+        testimonial = self.get_object(pk)
+        testimonial.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
