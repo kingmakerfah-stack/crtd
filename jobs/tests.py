@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import Module, SubAdminProfile
-from jobs.models import Job
+from jobs.models import Job, Testimonial
 
 
 User = get_user_model()
@@ -69,4 +69,108 @@ class JobRBACTests(APITestCase):
         job = Job.objects.create(**self.payload)
         self.client.force_authenticate(user=self.superadmin)
         response = self.client.delete(reverse("job-detail", args=[job.id]))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class TestimonialAPITests(APITestCase):
+    def setUp(self):
+        self.superadmin = User.objects.create_user(
+            email="testimonials-superadmin@example.com",
+            password="secret123",
+            role="superadmin",
+        )
+        self.subadmin = User.objects.create_user(
+            email="testimonials-subadmin@example.com",
+            password="secret123",
+            role="subadmin",
+        )
+        self.unassigned_subadmin = User.objects.create_user(
+            email="testimonials-unassigned@example.com",
+            password="secret123",
+            role="subadmin",
+        )
+
+        web_update_module = Module.objects.create(
+            name="web_update",
+            display_name="Web Update",
+            order=1,
+        )
+
+        profile = SubAdminProfile.objects.create(user=self.subadmin, created_by=self.superadmin)
+        profile.allowed_modules.set([web_update_module])
+        SubAdminProfile.objects.create(user=self.unassigned_subadmin, created_by=self.superadmin)
+
+        self.published = Testimonial.objects.create(
+            name="Asha Patel",
+            profile="B.Tech",
+            feedback="Great support",
+            rating="5 Star",
+            status=Testimonial.STATUS_PUBLISHED,
+        )
+        self.draft = Testimonial.objects.create(
+            name="Draft User",
+            profile="MBA",
+            feedback="Draft content",
+            rating="4 Star",
+            status=Testimonial.STATUS_DRAFT,
+        )
+
+    def test_public_testimonial_list_shows_only_published(self):
+        response = self.client.get(reverse("public-testimonial-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.published.id)
+
+    def test_subadmin_with_web_update_can_get_admin_testimonials(self):
+        self.client.force_authenticate(user=self.subadmin)
+        response = self.client.get(reverse("admin-testimonial-list-create"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_subadmin_without_web_update_gets_403_on_admin_testimonials(self):
+        self.client.force_authenticate(user=self.unassigned_subadmin)
+        response = self.client.get(reverse("admin-testimonial-list-create"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_subadmin_with_web_update_can_create_testimonial(self):
+        self.client.force_authenticate(user=self.subadmin)
+        payload = {
+            "name": "Neha",
+            "profile": "BCA",
+            "feedback": "Nice process",
+            "rating": "5 Star",
+            "status": "published",
+        }
+        response = self.client.post(reverse("admin-testimonial-list-create"), payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_put_updates_testimonial(self):
+        self.client.force_authenticate(user=self.superadmin)
+        payload = {
+            "name": "Updated Name",
+            "profile": "MCA",
+            "feedback": "Updated feedback",
+            "rating": "3 Star",
+            "status": "draft",
+        }
+        response = self.client.put(
+            reverse("admin-testimonial-detail", args=[self.published.id]),
+            payload,
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["profile"], "MCA")
+
+    def test_patch_updates_testimonial_status(self):
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.patch(
+            reverse("admin-testimonial-detail", args=[self.published.id]),
+            {"status": "draft"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "draft")
+
+    def test_delete_testimonial(self):
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.delete(reverse("admin-testimonial-detail", args=[self.published.id]))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
