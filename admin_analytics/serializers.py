@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import EnquiryAnalytics, Testimonial,CompanyPartners
+from .models import EnquiryAnalytics, CompanyPartners
 
 
 class EnquiryAnalyticsSerializer(serializers.Serializer):
@@ -59,13 +59,7 @@ class UpdateReferenceStatusSerializer(serializers.Serializer):
             "membership_pending",
             "membership_completed"
         ]
-    )   
-
-class TestimonialSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = Testimonial
-        fields = "__all__"
+    )
 
 class CompanyPartnersSerializer(serializers.ModelSerializer):
     class Meta:

@@ -5,10 +5,6 @@ from .views import (EnquiryAnalyticsView,
                     UpdateReferenceStatusView,
                     DeleteReferenceCodeView,
                     PaymentAnalyticsView, 
-                    CreateTestimonialView,
-                    TestimonialListView,
-                    UpdateTestimonialView,
-                    DeleteTestimonialView,
                     UpdateCompanyPartnersView,
                     CollaborationAnalyticsAPIView)
 
@@ -31,18 +27,6 @@ urlpatterns = [
         name="delete-reference-code"
     ),    
     path('payments-analytics/',PaymentAnalyticsView.as_view()),
-
-    path(
-        "testimonials/",TestimonialListView.as_view()),
-
-    path(
-        "testimonials/create/",CreateTestimonialView.as_view()),
-
-    path(
-        "testimonials/<int:pk>/update/",UpdateTestimonialView.as_view()),
-
-    path( "testimonials/<int:pk>/delete/", DeleteTestimonialView.as_view()),
-
 
     path("company-partners/update/",UpdateCompanyPartnersView.as_view()),
     path("collaborations/",CollaborationAnalyticsAPIView.as_view())

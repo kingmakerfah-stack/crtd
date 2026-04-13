@@ -7,16 +7,15 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
-from admin_analytics.models import Testimonial,CompanyPartners
-from admin_analytics.pagination import TestimonialPagination
+from admin_analytics.models import CompanyPartners
 from admin_analytics.serializers import ReferenceCodeStatusSerializer
 from accounts.access_control import filter_preapplications_for_user
 from accounts.permissions import HasModuleAccess, IsAdminPortalUser
 from pre_application.models import PreApplication, ReferalCode
 from datetime import timedelta
 from payments.models import Payment
-from jobs.models import Job
-from .serializers import UpdateReferenceStatusSerializer, TestimonialSerializer,CompanyPartnersSerializer
+from jobs.models import Job, Testimonial as JobsTestimonial
+from .serializers import UpdateReferenceStatusSerializer, CompanyPartnersSerializer
 
 class EnquiryAnalyticsView(APIView):
     permission_classes = [IsAdminPortalUser, HasModuleAccess]
@@ -254,96 +253,6 @@ class PaymentAnalyticsView(APIView):
             "total_transactions": analytics["total_transactions"] or 0,
         }
         return Response(data)
-
-class CreateTestimonialView(APIView):
-    permission_classes = [IsAdminPortalUser, HasModuleAccess]
-    required_module = 'web_update'
-    required_module_action = 'edit'
-
-    @swagger_auto_schema(request_body=TestimonialSerializer,
-                         tags=["Admin Analytics"])
-    def post(self, request):
-
-        serializer = TestimonialSerializer(data=request.data)
-
-        if serializer.is_valid():
-            serializer.save()
-
-            return Response(
-                {"message": "Testimonial created successfully"},
-                status=201
-            )
-
-        return Response(serializer.errors, status=400) 
-
-class TestimonialListView(APIView):
-    permission_classes = [IsAdminPortalUser, HasModuleAccess]
-    required_module = 'web_update'
-    required_module_action = 'view'
-    @swagger_auto_schema(tags=["Admin Analytics"])
-    def get(self, request):
-
-        queryset = Testimonial.objects.all().order_by("-created_at")
-
-        paginator = TestimonialPagination()
-        page = paginator.paginate_queryset(queryset, request)
-
-        serializer = TestimonialSerializer(page, many=True)
-
-        return paginator.get_paginated_response(serializer.data) 
-
-class UpdateTestimonialView(APIView):
-    permission_classes = [IsAdminPortalUser, HasModuleAccess]
-    required_module = 'web_update'
-    required_module_action = 'edit'
-
-    @swagger_auto_schema(request_body=TestimonialSerializer,
-                         tags=["Admin Analytics"])
-    def patch(self, request, pk):
-
-        try:
-            testimonial = Testimonial.objects.get(id=pk)
-        except Testimonial.DoesNotExist:
-            return Response(
-                {"error": "Testimonial not found"},
-                status=404
-            )
-
-        serializer = TestimonialSerializer(
-            testimonial,
-            data=request.data,
-            partial=True
-        )
-
-        if serializer.is_valid():
-            serializer.save()
-
-            return Response({
-                "message": "Testimonial updated successfully"
-            })
-
-        return Response(serializer.errors, status=400)
-
-class DeleteTestimonialView(APIView):
-    permission_classes = [IsAdminPortalUser, HasModuleAccess]
-    required_module = 'web_update'
-    required_module_action = 'edit'
-    @swagger_auto_schema(tags=["Admin Analytics"])
-    def delete(self, request, pk):
-
-        try:
-            testimonial = Testimonial.objects.get(id=pk)
-        except Testimonial.DoesNotExist:
-            return Response(
-                {"error": "Testimonial not found"},
-                status=404
-            )
-
-        testimonial.delete()
-
-        return Response({
-            "message": "Testimonial deleted successfully"
-        })
 class UpdateCompanyPartnersView(APIView):
     permission_classes =[IsAdminPortalUser, HasModuleAccess]
     required_module = 'web_update'
@@ -377,7 +286,7 @@ class CollaborationAnalyticsAPIView(APIView):
         total_job_openings = Job.objects.aggregate(
             total=Sum("total_vacancies")
         )['total'] or 0
-        testimonials = Testimonial.objects.count()
+        testimonials = JobsTestimonial.objects.count()
         
         data = {
             "total_partners": partners.total_partners,
