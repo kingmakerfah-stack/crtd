@@ -1,6 +1,8 @@
 from rest_framework.permissions import BasePermission
 from .access_control import has_admin_portal_access
 from .models import SubAdminProfile
+from payments.models import StudentSubscription
+from datetime import date
 
 
 class IsAdmin(BasePermission):
@@ -104,4 +106,21 @@ class CanManageSubadmins(BasePermission):
         try:
             return user.subadmin_profile.has_module_access('sub_admin', action='edit')
         except SubAdminProfile.DoesNotExist:
+            return False
+
+
+# create a permission class for the  active subscriber to check the active subscription status whether it is expired or the active
+class IsActiveSubscriber(BasePermission):
+    def has_permission(self, request, view):
+        try:
+            sub = StudentSubscription.objects.get(student=request.user)
+
+            if sub.expiry_date < date.today():
+                sub.status = "EXPIRED"
+                sub.save()
+                return False
+
+            return sub.status == "ACTIVE"
+
+        except:
             return False

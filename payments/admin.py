@@ -1,7 +1,10 @@
 from django.contrib import admin
-from .models import Payment,PaymentHistory
+from .models import Payment,PaymentHistory,StudentSubscription,RegistrationSequence
 # Register your models here.
 # admin.site.register(Payment)
+
+admin.site.register(StudentSubscription)
+admin.site.register(RegistrationSequence)
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
