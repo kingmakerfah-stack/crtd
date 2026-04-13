@@ -23,6 +23,7 @@ class JobCardSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "job_role",
+            "job_mode",
             "department",
             "total_vacancies",
             "experience",
@@ -40,9 +41,11 @@ class JobDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "job_role",
+            "job_mode",
             "location",
             "package",
             "total_vacancies",
+            "department",
             "experience",
             "job_description",
             "skills_required",
