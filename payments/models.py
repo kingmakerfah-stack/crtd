@@ -160,13 +160,28 @@ class PaymentHistory(models.Model):
 
 
 class StudentSubscription(models.Model):
+    STATUS_ACTIVE = "ACTIVE"
+    STATUS_EXPIRED = "EXPIRED"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_EXPIRED, "Expired"),
+    ]
+
     student = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    payment = models.ForeignKey(Payment, on_delete=models.CASCADE)
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, null=True, blank=True)
+
+    student_payment = models.ForeignKey(
+        "StudentPayment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="subscriptions",
+    )
 
     registration_number = models.CharField(max_length=20, unique=True, null=True, blank=True)
 
-    status = models.CharField(max_length=20, default="ACTIVE",db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE, db_index=True)
 
     payment_date = models.DateField(null=True, blank=True)
 
@@ -178,3 +193,33 @@ class StudentSubscription(models.Model):
 class RegistrationSequence(models.Model):
     year = models.IntegerField(unique=True)
     last_number = models.IntegerField(default=0)
+
+
+class StudentPayment(models.Model):
+    STATUS_CREATED = "created"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_CREATED, "Created"),
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="student_payments",
+    )
+    razorpay_order_id = models.CharField(max_length=255, unique=True)
+    razorpay_payment_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    razorpay_signature = models.TextField(null=True, blank=True)
+    amount = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_CREATED, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.student_id} - {self.razorpay_order_id} - {self.status}"

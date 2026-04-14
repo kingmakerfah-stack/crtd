@@ -11,8 +11,6 @@ def get_razorpay_client():
 def create_razorpay_order(user_id, amount):
 
     client = get_razorpay_client()
-    print("KEY:", settings.RAZORPAY_KEY_ID)
-    print("SECRET:", settings.RAZORPAY_KEY_SECRET)
 
     order = client.order.create({
         "amount": amount,

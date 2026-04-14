@@ -20,10 +20,10 @@ from .serializers import (ApplyJobSerializer,CoolDownSerializer,
                         UpdateCoolDownSerializer,
                         ApplicationDetailSerializer
                           )
-from accounts.permissions import IsActiveSubscriber
+from accounts.permissions import IsActiveSubscriber, IsStudent
 
 class ApplyJobView(APIView):
-    permission_classes = [IsAuthenticated,IsActiveSubscriber]
+    permission_classes = [IsAuthenticated, IsStudent, IsActiveSubscriber]
 
     @swagger_auto_schema(
             tags=["Applications"],
@@ -271,7 +271,7 @@ class UpdateApplicationStatusView(APIView):
 
 #student my application view
 class StudentApplicationListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsStudent, IsActiveSubscriber]
     @swagger_auto_schema(
             tags=["Applications"]
     )
