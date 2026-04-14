@@ -111,16 +111,34 @@ class CanManageSubadmins(BasePermission):
 
 # create a permission class for the  active subscriber to check the active subscription status whether it is expired or the active
 class IsActiveSubscriber(BasePermission):
+    message = 'Payment required.'
+
     def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            self.message = 'Authentication required.'
+            return False
+
         try:
             sub = StudentSubscription.objects.get(student=request.user)
-
-            if sub.expiry_date < date.today():
-                sub.status = "EXPIRED"
-                sub.save()
-                return False
-
-            return sub.status == "ACTIVE"
-
-        except:
+        except StudentSubscription.DoesNotExist:
+            self.message = 'Payment required.'
             return False
+
+        today = date.today()
+        if (
+            sub.status == "ACTIVE"
+            and sub.expiry_date
+            and sub.expiry_date < today
+        ):
+            sub.status = "EXPIRED"
+            sub.save(update_fields=["status", "renewed_at"])
+
+        if sub.status != "ACTIVE":
+            self.message = 'Subscription expired. Please renew.'
+            return False
+
+        if not sub.expiry_date or sub.expiry_date < today:
+            self.message = 'Subscription expired. Please renew.'
+            return False
+
+        return True

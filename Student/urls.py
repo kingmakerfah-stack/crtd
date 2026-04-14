@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 from .views import (
     StudentDataView,
     StudentPersonalDetails,
@@ -18,5 +18,11 @@ urlpatterns = [
 
     # 🔹 Career Preference
     path("profile/career/", StudentCareerPreferenceView.as_view(), name="student-career"),
+
+    # Student payment/subscription canonical routes
+    path("", include("Student.payment_urls")),
+
+    # Student jobs and applications canonical routes
+    path("", include("Student.job_urls")),
 
 ]
