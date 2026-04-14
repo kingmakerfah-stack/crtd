@@ -10,11 +10,6 @@ class AdminRegisterSerializer(serializers.Serializer):
     name = serializers.CharField()
     role = serializers.ChoiceField(choices=AdminUser.ROLE_CHOICES)
 
-    def _to_custom_user_role(self, admin_role):
-        if admin_role == "sub_admin":
-            return "subadmin"
-        return "admin"
-
     def create(self, validated_data):
 
         email = validated_data["email"]
@@ -25,8 +20,7 @@ class AdminRegisterSerializer(serializers.Serializer):
         user = CustomUser.objects.create_user(
             email=email,
             password=password,
-            role=self._to_custom_user_role(role),
-            is_staff=True,
+            role="admin"
         )
 
         admin = AdminUser.objects.create(
