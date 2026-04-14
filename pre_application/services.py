@@ -87,10 +87,7 @@ def create_referral_for_pre_application(pre_application, created_by=None):
         if locked_pre_application.is_deleted:
             raise ReferralGenerationError("Cannot generate referral for archived pre-application")
 
-        if (
-            locked_pre_application.verified
-            or ReferalCode.objects.select_for_update().filter(student=locked_pre_application).exists()
-        ):
+        if ReferalCode.objects.select_for_update().filter(student=locked_pre_application).exists():
             raise ReferralGenerationError("Referral already exists for this student")
 
         for _ in range(max_attempts):

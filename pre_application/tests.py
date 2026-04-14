@@ -431,6 +431,54 @@ class PreApplicationAPITests(APITestCase):
         self.assertFalse(ReferalCode.objects.filter(student=pre_application).exists())
         mock_send_email.assert_not_called()
 
+    @patch("pre_application.services.EmailService.send_approval_email")
+    def test_referral_delete_resets_verified_and_allows_recreate(self, mock_send_email):
+        pre_application = self.create_pre_application(email="recreate-referral@example.com")
+        self.client.force_authenticate(user=self.admin_user)
+
+        first_response = self.client.post(
+            reverse("create-referral-by-enquiry-token", args=[pre_application.enquiry_token])
+        )
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        first_code = first_response.data["code"]
+
+        referral = ReferalCode.objects.get(student=pre_application)
+        referral.delete()
+
+        pre_application.refresh_from_db()
+        self.assertFalse(pre_application.verified)
+
+        second_response = self.client.post(
+            reverse("create-referral-by-enquiry-token", args=[pre_application.enquiry_token])
+        )
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        second_code = second_response.data["code"]
+        self.assertNotEqual(first_code, second_code)
+
+        list_response = self.client.get(reverse("pre-application-list"))
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        row = next(item for item in list_response.data["results"] if item["id"] == pre_application.id)
+        self.assertEqual(row["reference_code"], second_code)
+        self.assertEqual(mock_send_email.call_count, 2)
+
+    @patch("pre_application.services.EmailService.send_approval_email")
+    def test_referral_delete_updates_verified_flag(self, mock_send_email):
+        pre_application = self.create_pre_application(email="delete-verified@example.com")
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            reverse("create-referral-by-enquiry-token", args=[pre_application.enquiry_token])
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        pre_application.refresh_from_db()
+        self.assertTrue(pre_application.verified)
+
+        ReferalCode.objects.get(student=pre_application).delete()
+        pre_application.refresh_from_db()
+        self.assertFalse(pre_application.verified)
+        mock_send_email.assert_called_once()
+
     def test_referral_validation_returns_candidate_details(self):
         pre_application = self.create_pre_application()
         pre_application.verified = True
