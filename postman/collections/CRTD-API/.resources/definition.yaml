@@ -1,0 +1,23 @@
+$kind: collection
+name: CRTD API
+variables:
+  - key: baseUrl
+    value: 'http://localhost:8000'
+  - key: accessToken
+    value: ''
+  - key: refreshToken
+    value: ''
+  - key: referenceCode
+    value: ''
+  - key: googleIdToken
+    value: ''
+  - key: jobId
+    value: ''
+  - key: enquiryToken
+    value: ''
+  - key: referralCode
+    value: ''
+  - key: preApplicationId
+    value: ''
+  - key: pk
+    value: ''

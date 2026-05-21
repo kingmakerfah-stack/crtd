@@ -1,0 +1,16 @@
+$kind: http-request
+name: Admin Login
+method: POST
+url: '{{baseUrl}}/api/admin/auth/login/'
+order: 8000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "admin@example.com",
+      "password": "adminpassword"
+    }
+description: 'Admin/Subadmin 2FA login - step 1.'

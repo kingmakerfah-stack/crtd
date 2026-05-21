@@ -1,0 +1,6 @@
+$kind: http-request
+name: Get Pre-Application by Enquiry Token
+method: GET
+url: '{{baseUrl}}/api/pre-application/enquiry/{{enquiryToken}}/'
+order: 4000
+description: Retrieve a pre-application by enquiry token.

@@ -1,0 +1,19 @@
+$kind: http-request
+name: Verify Payment
+method: POST
+url: '{{baseUrl}}/payments/verify-payment/'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "razorpay_order_id": "order_xxx",
+      "razorpay_payment_id": "pay_xxx",
+      "razorpay_signature": "signature_xxx"
+    }
+description: Verify a Razorpay payment after completion.

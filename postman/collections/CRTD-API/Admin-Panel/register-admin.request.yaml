@@ -1,0 +1,19 @@
+$kind: http-request
+name: Register Admin
+method: POST
+url: '{{baseUrl}}/api/admin-panel/register/'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "admin@example.com",
+      "password": "adminpassword",
+      "role": "admin"
+    }
+description: Register a new admin or subadmin user.

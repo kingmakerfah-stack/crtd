@@ -5,126 +5,83 @@ from .models import *
 # ---------------------------------------------------------
 # Student Serializer
 # ---------------------------------------------------------
-# Used to create or represent the main Student model.
-# This does NOT handle related profile sections.
-# profile_completed should ideally be controlled by backend logic.
-# ---------------------------------------------------------
-
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            "user",               # Linked Django User (OneToOne)
-            "enrollment_id",      # Unique student enrollment ID
-            "profile_completed",  # Boolean flag indicating full profile completion
-            "is_active",          # Soft activation flag
+            "user",
+            "enrollment_id",
+            "profile_completed",  # ✅ Now exists on model
+            "is_active",
         ]
-        # In production, profile_completed is usually read_only
-        # read_only_fields = ["profile_completed"]
+        read_only_fields = ["profile_completed"]  # ✅ Controlled by backend logic only
 
 
 # ---------------------------------------------------------
 # Student Personal Detail Serializer
 # ---------------------------------------------------------
-# Handles creation of personal information section.
-# Ensures only ONE personal detail object exists per student.
-# ---------------------------------------------------------
-
 class StudentPersonalDetailSerializer(serializers.ModelSerializer):
-    
+
     class Meta:
         model = StudentPersonalDetail
-        fields = "__all__"  # Includes student foreign key and all personal fields
+        fields = "__all__"
+        # ✅ FIX: student FK is now read-only — injected server-side, not accepted from client
+        read_only_fields = ["student"]
 
     def create(self, validated_data):
         """
-        Custom create method to prevent duplicate personal detail
-        for the same student (OneToOne relationship enforcement).
+        Called only from POST. Prevents duplicate personal detail per student.
+        student is injected via view's perform_create / save(student=...).
         """
         student = validated_data.get("student")
-
-        # Check if personal detail already exists
         if StudentPersonalDetail.objects.filter(student=student).exists():
             raise serializers.ValidationError(
                 "Personal detail already exists for this student."
             )
-
-        # Create and return new personal detail record
         return StudentPersonalDetail.objects.create(**validated_data)
 
 
 # ---------------------------------------------------------
 # Student Education Serializer
 # ---------------------------------------------------------
-# Handles educational details section.
-# Enforces one education record per student.
-# ---------------------------------------------------------
-
 class StudentEducationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StudentEducation
         fields = "__all__"
+        # ✅ FIX: student FK is now read-only
+        read_only_fields = ["student"]
 
     def create(self, validated_data):
         """
-        Prevents creating multiple education records
-        for the same student.
+        Called only from POST. Prevents duplicate education record per student.
         """
         student = validated_data.get("student")
-
         if StudentEducation.objects.filter(student=student).exists():
             raise serializers.ValidationError(
                 "Education record already exists for this student."
             )
-
         return StudentEducation.objects.create(**validated_data)
 
 
 # ---------------------------------------------------------
 # Student Career Preference Serializer
 # ---------------------------------------------------------
-# Handles career preference details.
-# Ensures only one career preference record per student.
-# ---------------------------------------------------------
-
 class StudentCareerPreferenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StudentCareerPreference
         fields = "__all__"
+        # ✅ FIX: student FK is now read-only
+        read_only_fields = ["student"]
 
     def create(self, validated_data):
         """
-        Prevents duplicate career preference records
-        for the same student.
+        Called only from POST. Prevents duplicate career preference per student.
         """
         student = validated_data.get("student")
-
         if StudentCareerPreference.objects.filter(student=student).exists():
             raise serializers.ValidationError(
                 "Career preference already exists for this student."
             )
-
         return StudentCareerPreference.objects.create(**validated_data)
-
-
-# ---------------------------------------------------------
-# Student OTP Serializer
-# ---------------------------------------------------------
-# Handles OTP verification for student registration.
-# ---------------------------------------------------------
-
-class StudentOTPSerializer(serializers.ModelSerializer):
-    """Serializer for StudentOTP model."""
-    
-    class Meta:
-        model = StudentOTP
-        fields = ['student', 'otp', 'created_at', 'expires_at', 'is_verified']
-        read_only_fields = ['created_at', 'expires_at']
-
-
-class StudentOTPVerifySerializer(serializers.Serializer):
-    """Serializer for verifying StudentOTP code."""
-    enrollment_id = serializers.CharField()
-    otp = serializers.CharField(max_length=10)

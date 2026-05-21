@@ -1,0 +1,9 @@
+$kind: http-request
+name: Collaboration Analytics
+method: GET
+url: '{{baseUrl}}/api/admin-analytics/collaborations/'
+order: 12000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Get collaboration analytics data.

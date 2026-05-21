@@ -1,0 +1,9 @@
+$kind: http-request
+name: Reference Code Status
+method: GET
+url: '{{baseUrl}}/api/admin-analytics/reference-code-status/'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Get reference code status overview.

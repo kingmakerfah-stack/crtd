@@ -1,0 +1,9 @@
+$kind: http-request
+name: Lookup Pre-Application (Admin)
+method: GET
+url: '{{baseUrl}}/api/pre-application/admin/lookup/'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Admin endpoint to lookup a specific pre-application.

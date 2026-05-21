@@ -1,6 +1,7 @@
 import secrets
 import string
 from django.conf import settings
+from django.contrib.auth.hashers import check_password, identify_hasher, make_password
 from django.utils import timezone
 from datetime import timedelta
 from utils.tasks import send_otp_email_task, send_approval_email_task, send_html_email_task
@@ -68,7 +69,23 @@ def generate_otp(length=4):
         - Should never be logged or exposed in error messages
         - The OTP should be sent via email, not SMS, for this implementation
     """
-    return ''.join(secrets.choice(string.digits) for _ in range(length))
+    if length <= 0:
+        raise ValueError("OTP length must be greater than 0")
+
+    # Avoid leading zero to prevent client-side numeric inputs from dropping it.
+    first_digit = secrets.choice("123456789")
+    if length == 1:
+        return first_digit
+    return first_digit + ''.join(secrets.choice(string.digits) for _ in range(length - 1))
+
+
+def _is_password_hash(value):
+    """Return True when value is a Django password-hash encoded string."""
+    try:
+        identify_hasher(value)
+        return True
+    except Exception:
+        return False
 
 
 class EmailService:
@@ -262,7 +279,7 @@ class EmailService:
         return task_result
     
     @staticmethod
-    def send_verification_otp(user, expiration_minutes=10, purpose='email_verification'):
+    def send_verification_otp(user, expiration_minutes=10, purpose='email_verification',otp_length=4):
         """
         Generates an OTP, stores it in the database, and queues email via Celery.
         
@@ -294,16 +311,16 @@ class EmailService:
         from accounts.models import EmailOTP
 
         # Generate OTP
-        otp_code = generate_otp()
+        otp_code = generate_otp(otp_length)
 
         # Create or update EmailOTP record (also handles resend safely)
         otp_instance, created = EmailOTP.objects.update_or_create(
             user=user,
+            purpose=purpose,
             defaults={
-                'otp': otp_code,
+                'otp': make_password(otp_code),
                 'expires_at': timezone.now() + timedelta(minutes=expiration_minutes),
                 'is_verified': False,
-                'purpose': purpose,
             }
         )
 
@@ -326,7 +343,7 @@ class EmailService:
         return otp_code, otp_instance, task_result
 
     @staticmethod
-    def send_password_reset_otp(user, expiration_minutes=10):
+    def send_password_reset_otp(user, expiration_minutes=10, otp_length=4):
         """
         Convenience wrapper that generates and sends a password-reset OTP.
 
@@ -340,6 +357,7 @@ class EmailService:
             user,
             expiration_minutes=expiration_minutes,
             purpose='password_reset',
+            otp_length=otp_length
         )
     
     @staticmethod
@@ -367,18 +385,11 @@ class EmailService:
         from accounts.models import EmailOTP
 
         try:
-            otp_instance = EmailOTP.objects.get(user=user)
+            otp_instance = EmailOTP.objects.get(user=user, purpose=purpose)
         except EmailOTP.DoesNotExist:
             return {
                 'success': False,
                 'message': 'No OTP found. Please request a new one.'
-            }
-
-        # Ensure this OTP belongs to the correct flow
-        if otp_instance.purpose != purpose:
-            return {
-                'success': False,
-                'message': 'No OTP found for this action. Please request a new one.'
             }
 
         # Check if expired
@@ -395,8 +406,24 @@ class EmailService:
                 'message': 'OTP has already been used.'
             }
 
-        # Check if OTP matches
-        if otp_instance.otp != otp_code:
+        submitted_otp = str(otp_code).strip()
+        stored_otp = str(otp_instance.otp).strip()
+
+        # Some clients send OTP as numeric value and can drop leading zeros.
+        if (
+            submitted_otp.isdigit()
+            and stored_otp.isdigit()
+            and len(submitted_otp) < len(stored_otp)
+        ):
+            submitted_otp = submitted_otp.zfill(len(stored_otp))
+
+        # New records store OTP hashed; allow plaintext fallback for legacy rows.
+        if _is_password_hash(stored_otp):
+            is_match = check_password(submitted_otp, stored_otp)
+        else:
+            is_match = stored_otp == submitted_otp
+
+        if not is_match:
             return {
                 'success': False,
                 'message': 'Invalid OTP. Please try again.'

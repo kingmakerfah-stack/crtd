@@ -1,0 +1,6 @@
+$kind: http-request
+name: Razorpay Webhook
+method: POST
+url: '{{baseUrl}}/payments/webhook/'
+order: 3000
+description: Razorpay webhook endpoint for payment events.

@@ -1,0 +1,129 @@
+{% comment %} <!DOCTYPE html>
+<html>
+
+<head>
+    <title>CRTD Payment</title>
+</head>
+
+<body>
+
+    <h2>CRTD Subscription</h2>
+
+    <button id="pay-btn">Pay ₹500</button>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <script>
+
+        document.getElementById("pay-btn").onclick = async function () {
+
+            // 🔐 Paste your JWT access token here
+            const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc2MDM3NjA5LCJpYXQiOjE3NzYwMDg4MDksImp0aSI6ImNlMjI2YjRiNTBiYTRmYzg4NzJiYzkzYWFmMTdiZWIyIiwidXNlcl9pZCI6IjQifQ.NHaRUAkDV_1MlfIMHMMDHF8JjEO8VByP73_RvgpT8t4";
+
+            try {
+                // 1️⃣ Create Order
+                const response = await fetch("http://127.0.0.1:8000/api/payments/create-order/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + token   // ✅ IMPORTANT
+                    }
+                });
+
+                const data = await response.json();
+                console.log("CREATE ORDER:", data);
+
+                if (!response.ok) {
+                    alert(data.detail || data.error || "Failed to create order");
+                    return;
+                }
+
+                // 2️⃣ Razorpay Popup
+                const options = {
+                    key: data.key,
+                    amount: data.amount,
+                    currency: "INR",
+                    order_id: data.order_id,
+
+                    name: "CRTD Portal",
+                    description: "6 Month Subscription",
+
+                    handler: async function (response) {
+
+                        try {
+                            // 3️⃣ Verify Payment
+                            const verifyRes = await fetch("http://127.0.0.1:8000/api/payments/verify-payment/", {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "Authorization": "Bearer " + token   // ✅ IMPORTANT
+                                },
+                                body: JSON.stringify({
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_signature: response.razorpay_signature
+                                })
+                            });
+
+                            const verifyData = await verifyRes.json();
+                            console.log("VERIFY:", verifyData);
+
+                            if (verifyRes.ok) {
+                                alert("Payment Successful ✅");
+                            } else {
+                                alert("Verification Failed ❌");
+                            }
+
+                        } catch (err) {
+                            console.error("VERIFY ERROR:", err);
+                            alert("Verification error");
+                        }
+                    }
+                };
+
+                const rzp = new Razorpay(options);
+                rzp.open();
+
+            } catch (err) {
+                console.error("CREATE ORDER ERROR:", err);
+                alert("Something went wrong");
+            }
+        };
+
+    </script>
+
+</body>
+
+</html> {% endcomment %}
+
+<button id="rzp-button1">Pay Now</button>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+var options = {
+    "key": "rzp_test_S2DT5A8Ox2HzSy", // Enter the Key ID
+    "amount": "200000", // Amount is in currency subunits (200000 = ₹2000)
+    "currency": "INR",
+    "name": "Test Transaction",
+    "description": "Testing Order Flow",
+    "order_id": "order_SdFKTipdl6dhtZ", // Your Order ID
+    "handler": function (response){
+        alert("Payment Successful!");
+        console.log("Payment ID:", response.razorpay_payment_id);
+        console.log("Order ID:", response.razorpay_order_id);
+        console.log("Signature:", response.razorpay_signature);
+    },
+    "prefill": {
+        "name": "Mohammed Fayaz",
+        "email": "narutobaba02@gmail.com",
+        "contact": "9999999999"
+    },
+    "theme": {
+        "color": "#3399cc"
+    }
+};
+var rzp1 = new Razorpay(options);
+document.getElementById('rzp-button1').onclick = function(e){
+    rzp1.open();
+    e.preventDefault();
+}
+</script>

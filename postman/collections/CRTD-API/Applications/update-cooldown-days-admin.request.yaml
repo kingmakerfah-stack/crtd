@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Cooldown Days (Admin)
+method: PATCH
+url: '{{baseUrl}}/api/applications/admin/cooldown-days/update/'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "cooldown_days": 30
+    }
+description: Admin endpoint to update the cooldown days for job applications.

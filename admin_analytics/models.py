@@ -1,0 +1,47 @@
+from django.db import models
+from pre_application.models import PreApplication
+
+
+class EnquiryAnalytics(models.Model):
+
+    STATUS_CHOICES = (
+        ("received", "Received"),
+        ("done", "Enquiry Done"),
+        ("pending", "Pending"),
+        ("not_interested", "Not Interested"),
+    )
+
+    student = models.OneToOneField(
+        PreApplication,
+        on_delete=models.CASCADE,
+        related_name="enquiry_analytics"
+    )
+
+    enquiry_token = models.CharField(
+        max_length=12,
+        unique=True,
+        editable=False
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="received"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def save(self, *args, **kwargs):
+        if self.student_id:
+            self.enquiry_token = self.student.enquiry_token
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+
+        return f"{self.enquiry_token} - {self.student.first_name}"
+
+class CompanyPartners(models.Model):
+    total_partners = models.IntegerField(default=0)

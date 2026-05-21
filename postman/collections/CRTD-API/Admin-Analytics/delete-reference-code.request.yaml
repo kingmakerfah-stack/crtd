@@ -1,0 +1,9 @@
+$kind: http-request
+name: Delete Reference Code
+method: DELETE
+url: '{{baseUrl}}/api/admin-analytics/reference-code/{{pk}}/delete/'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Delete a reference code.

@@ -1,0 +1,19 @@
+$kind: http-request
+name: Create Testimonial
+method: POST
+url: '{{baseUrl}}/api/admin-analytics/testimonials/create/'
+order: 8000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "John Doe",
+      "content": "Great experience!",
+      "rating": 5
+    }
+description: Create a new testimonial.

@@ -1,0 +1,26 @@
+$kind: http-request
+name: Submit Pre-Application Form
+method: POST
+url: '{{baseUrl}}/api/pre-application/submit-form/'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "whatsapp_no": "9876543210",
+      "alternate_phone": "9876543211",
+      "birthplace_state": "Maharashtra",
+      "qualification": "B.Tech",
+      "specialization": "Computer Science",
+      "college_name": "ABC College",
+      "college_state": "Maharashtra",
+      "passing_year": 2023,
+      "preferred_time": "morning"
+    }
+description: Submit a pre-application form.

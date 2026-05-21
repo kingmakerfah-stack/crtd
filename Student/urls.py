@@ -1,11 +1,9 @@
-from django.urls import path
+from django.urls import include, path
 from .views import (
     StudentDataView,
     StudentPersonalDetails,
     StudentEducationView,
     StudentCareerPreferenceView,
-    StudentOTPRequestView,
-    StudentOTPVerificationView,
 )
 
 urlpatterns = [
@@ -21,7 +19,10 @@ urlpatterns = [
     # 🔹 Career Preference
     path("profile/career/", StudentCareerPreferenceView.as_view(), name="student-career"),
 
-    # 🔹 OTP Verification for Registration
-    path("otp/request/", StudentOTPRequestView.as_view(), name="student-otp-request"),
-    path("otp/verify/", StudentOTPVerificationView.as_view(), name="student-otp-verify"),
+    # Student payment/subscription canonical routes
+    path("", include("Student.payment_urls")),
+
+    # Student jobs and applications canonical routes
+    path("", include("Student.job_urls")),
+
 ]

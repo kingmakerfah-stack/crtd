@@ -18,6 +18,7 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
+    path('', include('django_prometheus.urls')),
     path('admin/', admin.site.urls),
     path('api/pre-application/', include('pre_application.urls')),
     path('api/student/', include('Student.urls')),
@@ -32,12 +33,18 @@ urlpatterns = [
     
     # Include accounts authentication routes
     path('api/accounts/', include('accounts.urls')),
+    path('api/admin/', include('accounts.admin_urls')),
 
 
-    path('api/jobs/',include('Jobs.urls')),
+    path('api/jobs/',include('jobs.urls')),
 
     # Include admin panel routes
     path('api/admin-panel/', include('admin_panel.urls')),
+    path('api/admin-analytics/', include('admin_analytics.urls')),
+    path('api/applications/', include('applications.urls')),
+    path('api/subscription/', include('subscription.urls')),
+    #Include payments routes
+    path("api/payments/", include("payments.urls")), 
 
 ]
 

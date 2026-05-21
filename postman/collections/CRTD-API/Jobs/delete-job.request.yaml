@@ -1,0 +1,9 @@
+$kind: http-request
+name: Delete Job
+method: DELETE
+url: '{{baseUrl}}/api/jobs/{{jobId}}/'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+description: Delete a job listing.

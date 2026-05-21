@@ -1,7 +1,13 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import RegisterAPIView, LoginView, OTPRequestView, OTPVerificationView, PasswordResetView
-from .token_serializer import CustomTokenObtainPairView
+from .views import (
+    RegisterAPIView,
+    LoginView,
+    OTPRequestView,
+    OTPVerificationView,
+    PasswordResetView,
+    ChangePasswordView,
+)
 from .views import GoogleAuthView
 
 urlpatterns = [
@@ -24,4 +30,8 @@ urlpatterns = [
 
     # Final step of forgot-password: set new password after OTP is verified
     path('password-reset/', PasswordResetView.as_view(), name='password_reset'),
+
+    # Authenticated account settings password change
+    path('change-password/', ChangePasswordView.as_view(), name='change_password'),
+
 ]

@@ -1,12 +1,24 @@
-from rest_framework import serializers 
-from .models import PreApplication , ReferalCode
 import re
+
+from rest_framework import serializers
+
+from .models import PreApplication, ReferalCode
+
 
 class PreApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PreApplication
         fields = "__all__"
-        read_only_fields = ["created_at"]
+        read_only_fields = [
+            "enquiry_token",
+            "verified",
+            "created_at",
+            "status",
+            "is_deleted",
+            "deleted_at",
+            "deleted_reason",
+            "deleted_by",
+        ]
 
     def validate_first_name(self, value):
         value = value.strip()
@@ -34,7 +46,7 @@ class PreApplicationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_whatsapp_no(self, value):
-        pattern = r'^(?:\+91)?[6-9]\d{9}$'
+        pattern = r"^(?:\+91)?[6-9]\d{9}$"
 
         if not re.match(pattern, value):
             raise serializers.ValidationError(
@@ -45,7 +57,7 @@ class PreApplicationSerializer(serializers.ModelSerializer):
 
     def validate_alternate_phone(self, value):
         if value:
-            pattern = r'^(?:\+91)?[6-9]\d{9}$'
+            pattern = r"^(?:\+91)?[6-9]\d{9}$"
 
             if not re.match(pattern, value):
                 raise serializers.ValidationError(
@@ -55,51 +67,151 @@ class PreApplicationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        instance = getattr(self, 'instance', None)
+        normalized_email = value.strip().lower()
+        active_queryset = PreApplication.objects
+        all_queryset = PreApplication.all_objects
+        instance = getattr(self, "instance", None)
+
+        deleted_queryset = all_queryset.filter(email__iexact=normalized_email, is_deleted=True)
 
         if instance:
-            if PreApplication.objects.filter(email=value).exclude(pk=instance.pk).exists():
+            deleted_queryset = deleted_queryset.exclude(pk=instance.pk)
+
+        if deleted_queryset.exists():
+            raise serializers.ValidationError(
+                "A deleted pre-application already exists for this email. Please ask admin to restore it."
+            )
+
+        if instance:
+            if active_queryset.filter(email__iexact=normalized_email).exclude(pk=instance.pk).exists():
                 raise serializers.ValidationError(
                     "Application with this email already exists."
                 )
         else:
-            if PreApplication.objects.filter(email=value).exists():
+            if active_queryset.filter(email__iexact=normalized_email).exists():
                 raise serializers.ValidationError(
                     "Application with this email already exists."
                 )
 
-        return value
-
-import random
-import string
-from .models import ReferalCode
+        return normalized_email
 
 
 class ReferalCodeSerializer(serializers.ModelSerializer):
+    created_by_email = serializers.SerializerMethodField()
 
     class Meta:
         model = ReferalCode
-        fields = ['id', 'student', 'code', 'is_used', 'created_at']
-        read_only_fields = ['code', 'is_used', 'created_at']
+        fields = ["id", "student", "code", "status", "is_used", "admin", "created_by_email", "created_at"]
+        read_only_fields = ["student", "code", "status", "is_used", "admin", "created_by_email", "created_at"]
 
-    def generate_unique_code(self, length=8):
-        """
-        Generate a unique referral code.
-        """
+    def get_created_by_email(self, obj):
+        return obj.admin.email if obj.admin else None
 
-        while True:
-            code = ''.join(
-                random.choices(string.ascii_uppercase + string.digits, k=length)
+
+class PreApplicationLookupSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    reference_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PreApplication
+        fields = [
+            "id",
+            "enquiry_token",
+            "full_name",
+            "first_name",
+            "last_name",
+            "email",
+            "whatsapp_no",
+            "alternate_phone",
+            "verified",
+            "reference_code",
+        ]
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_reference_code(self, obj):
+        referral = getattr(obj, "referal_codes", None)
+        return referral.code if referral else None
+
+
+class PreApplicationAdminListSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    reference_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PreApplication
+        fields = [
+            "id",
+            "enquiry_token",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "whatsapp_no",
+            "alternate_phone",
+            "birthplace_state",
+            "qualification",
+            "specialization",
+            "college_name",
+            "college_state",
+            "passing_year",
+            "preferred_time",
+            "status",
+            "verified",
+            "is_deleted",
+            "deleted_at",
+            "deleted_reason",
+            "deleted_by",
+            "reference_code",
+            "created_at",
+        ]
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_reference_code(self, obj):
+        referral = getattr(obj, "referal_codes", None)
+        return referral.code if referral else None
+
+
+class PreApplicationStatusUpdateSerializer(serializers.ModelSerializer):
+    status = serializers.CharField()
+
+    class Meta:
+        model = PreApplication
+        fields = ["status"]
+
+    def validate_status(self, value):
+        normalized = str(value).strip().lower().replace("_", " ")
+
+        status_aliases = {
+            "pending": PreApplication.STATUS_PENDING,
+            "completed": PreApplication.STATUS_COMPLETED,
+            "enquiry done": PreApplication.STATUS_COMPLETED,
+            "done": PreApplication.STATUS_COMPLETED,
+            "not interested": PreApplication.STATUS_NOT_INTERESTED,
+        }
+
+        mapped = status_aliases.get(normalized)
+        if not mapped:
+            raise serializers.ValidationError(
+                "Invalid status. Allowed values: pending, completed, not interested."
             )
 
-            if not ReferalCode.objects.filter(code=code).exists():
-                return code
+        return mapped
 
-    def create(self, validated_data):
-        """
-        Override create to auto-generate unique referral code.
-        """
 
-        validated_data['code'] = self.generate_unique_code()
+class PreApplicationArchiveRequestSerializer(serializers.Serializer):
+    deleted_reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
 
-        return ReferalCode.objects.create(**validated_data)
+
+class PreApplicationActionResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    enquiry_token = serializers.CharField()
+    is_deleted = serializers.BooleanField()
+
+
+class ReferralValidationResponseSerializer(PreApplicationLookupSerializer):
+    class Meta(PreApplicationLookupSerializer.Meta):
+        fields = PreApplicationLookupSerializer.Meta.fields
